@@ -154,24 +154,22 @@ class UIPathSecurityAuditorV3:
         if not self.scan_directory.exists():
             raise FileNotFoundError(f"Directory not found: {self.scan_directory}")
         
-        # Get only top-level subdirectories and sort them alphabetically
-        top_level_directories = []
-        try:
-            for item in self.scan_directory.iterdir():
-                if item.is_dir():
-                    top_level_directories.append(item)
-        except PermissionError:
-            logger.warning(f"Permission denied accessing directory: {self.scan_directory}")
-            return self.results
+        # Recursively find all subdirectories (at any depth)
+        all_directories = [d for d in self.scan_directory.rglob('*') if d.is_dir()]
+        # Also include the immediate subdirectories (top-level)
+        top_level_directories = [d for d in self.scan_directory.iterdir() if d.is_dir()]
         
         # Sort directories alphabetically
+        all_directories.sort()
         top_level_directories.sort()
         
-        logger.info(f"Found {len(top_level_directories)} top-level directories to scan in alphabetical order")
+        logger.info(f"Found {len(all_directories)} directories to scan in alphabetical order")
         logger.info(f"Using {len(self.modules)} modules")
         
-        for dir_path in top_level_directories:
-            package_results = self.scan_package(dir_path, print_info=True)
+        for dir_path in all_directories:
+            # Only print INFO for top-level subdirectories
+            print_info = dir_path in top_level_directories
+            package_results = self.scan_package(dir_path, print_info=print_info)
             self.results['packages'][dir_path.name] = package_results
             self.results['total_packages'] += 1
             
