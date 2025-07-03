@@ -178,6 +178,9 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                 # Check if this is a TryCast in_config pattern
                 is_trycast_in_config_pattern_detected = is_trycast_in_config_pattern(attr_value)
                 
+                # Check if this is a DirectCast in_Config pattern
+                is_directcast_in_config_pattern_detected = is_directcast_in_config_pattern(attr_value)
+                
                 if is_networkcredential_dynamic_pattern_detected:
                     severity, description = determine_networkcredential_dynamic_severity_and_description(attr_value)
                     content_line = matched_text.strip()
@@ -214,6 +217,9 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                     content_line = matched_text.strip()
                 elif is_trycast_in_config_pattern_detected:
                     severity, description = determine_trycast_in_config_severity_and_description(attr_value)
+                    content_line = matched_text.strip()
+                elif is_directcast_in_config_pattern_detected:
+                    severity, description = determine_directcast_in_config_severity_and_description(attr_value)
                     content_line = matched_text.strip()
                 else:
                     description = f'Hard-coded {attr_name} detected'
@@ -290,6 +296,10 @@ def is_variable_format(value: str) -> bool:
         
         # Check for TryCast in_config patterns (different handling)
         if is_trycast_in_config_pattern(inner_content):
+            return False  # We want to flag these, but with different severity
+        
+        # Check for DirectCast in_Config patterns (different handling)
+        if is_directcast_in_config_pattern(inner_content):
             return False  # We want to flag these, but with different severity
         
         # Check for non-empty quoted strings - indicates hardcoded values
@@ -701,6 +711,58 @@ def determine_trycast_in_config_severity_and_description(attr_value: str) -> tup
             return 'MEDIUM', 'SecureText retrieved from TryCast in_config - Review configuration source security'
     else:
         return 'INFO', 'SecureText retrieved from TryCast in_config source - Review if source is secure'
+
+def is_directcast_in_config_pattern(content: str) -> bool:
+    """
+    Check if the content represents a DirectCast in_Config pattern.
+    Examples:
+    - DirectCast(in_Config(&quot;my_pass&quot;),SecureString)
+    - DirectCast(In_Config(&quot;ApiSecretKey&quot;), SecureString)
+    - DirectCast(in_config(&quot;token_value&quot;), String)
+    """
+    import re
+    
+    # Check if it's a DirectCast pattern first
+    if 'DirectCast' not in content:
+        return False
+    
+    # Pattern to match DirectCast with in_Config patterns
+    directcast_in_config_patterns = [
+        r'DirectCast\s*\(\s*in_Config\s*\(\s*&quot;[^&]+&quot;\s*\)\s*,\s*SecureString\s*\)',    # DirectCast(in_Config(&quot;key&quot;),SecureString)
+        r'DirectCast\s*\(\s*in_Config\s*\(\s*"[^"]+"\s*\)\s*,\s*SecureString\s*\)',              # DirectCast(in_Config("key"),SecureString)
+        r'DirectCast\s*\(\s*In_Config\s*\(\s*&quot;[^&]+&quot;\s*\)\s*,\s*SecureString\s*\)',    # DirectCast(In_Config(&quot;key&quot;), SecureString) - capitalized
+        r'DirectCast\s*\(\s*In_Config\s*\(\s*"[^"]+"\s*\)\s*,\s*SecureString\s*\)',              # DirectCast(In_Config("key"), SecureString) - capitalized
+        r'DirectCast\s*\(\s*in_config\s*\(\s*&quot;[^&]+&quot;\s*\)\s*,\s*SecureString\s*\)',    # DirectCast(in_config(&quot;key&quot;), SecureString) - lowercase
+        r'DirectCast\s*\(\s*in_config\s*\(\s*"[^"]+"\s*\)\s*,\s*SecureString\s*\)',              # DirectCast(in_config("key"), SecureString) - lowercase
+        r'DirectCast\s*\(\s*in_Config\s*\(\s*&quot;[^&]+&quot;\s*\)\s*,\s*String\s*\)',         # DirectCast(in_Config(&quot;key&quot;), String)
+        r'DirectCast\s*\(\s*in_Config\s*\(\s*"[^"]+"\s*\)\s*,\s*String\s*\)',                   # DirectCast(in_Config("key"), String)
+        r'DirectCast\s*\(\s*In_Config\s*\(\s*&quot;[^&]+&quot;\s*\)\s*,\s*String\s*\)',         # DirectCast(In_Config(&quot;key&quot;), String) - capitalized
+        r'DirectCast\s*\(\s*In_Config\s*\(\s*"[^"]+"\s*\)\s*,\s*String\s*\)',                   # DirectCast(In_Config("key"), String) - capitalized
+        r'DirectCast\s*\(\s*in_config\s*\(\s*&quot;[^&]+&quot;\s*\)\s*,\s*String\s*\)',         # DirectCast(in_config(&quot;key&quot;), String) - lowercase
+        r'DirectCast\s*\(\s*in_config\s*\(\s*"[^"]+"\s*\)\s*,\s*String\s*\)',                   # DirectCast(in_config("key"), String) - lowercase
+    ]
+    
+    for pattern in directcast_in_config_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            return True
+    
+    return False
+
+def determine_directcast_in_config_severity_and_description(attr_value: str) -> tuple:
+    """
+    Determine appropriate severity and description for DirectCast in_Config patterns.
+    Returns (severity, description)
+    """
+    # Check for specific DirectCast in_Config patterns
+    if 'in_Config' in attr_value or 'In_Config' in attr_value or 'in_config' in attr_value:
+        if 'SecureString' in attr_value:
+            return 'MEDIUM', 'SecureText retrieved from DirectCast in_Config SecureString - Review configuration source security'
+        elif 'String' in attr_value:
+            return 'MEDIUM', 'SecureText retrieved from DirectCast in_Config String - Review configuration source security'
+        else:
+            return 'MEDIUM', 'SecureText retrieved from DirectCast in_Config - Review configuration source security'
+    else:
+        return 'INFO', 'SecureText retrieved from DirectCast in_Config source - Review if source is secure'
 
 def find_line_number(content: str, search_text: str) -> int:
     """
