@@ -52,9 +52,9 @@ def parse_in_config_pattern(value: str) -> Optional[Tuple[str, str]]:
 
 def find_config_xlsx(package_path: Path) -> Optional[Path]:
     """
-    Find Config.xlsx file by walking up from the given path to the root.
+    Find Config.xlsx file by first checking package-directory/lib/net45/Data, then walking up from the given path to the root.
     If package_path is a file, start from its parent directory.
-    Looks for Config.xlsx in the current directory and each parent up to the filesystem root.
+    Looks for Config.xlsx in the default location first, then in the current directory and each parent up to the filesystem root.
     Args:
         package_path: Path to the package directory or a subdirectory/file within it
     Returns:
@@ -64,13 +64,24 @@ def find_config_xlsx(package_path: Path) -> Optional[Path]:
     if p.is_file():
         p = p.parent
     p = p.resolve()
+
+    # 1. Check default location: package-directory/lib/net45/Data/Config.xlsx
+    default_config = p / 'lib' / 'net45' / 'Data' / 'Config.xlsx'
+    if default_config.is_file():
+        return default_config
+
+    # 2. Walk up from the given path to the root
+    search_path = p
     while True:
-        candidate = p / 'Config.xlsx'
+        candidate = search_path / 'Config.xlsx'
         if candidate.is_file():
             return candidate
-        if p.parent == p:
+        if search_path.parent == search_path:
             break  # Reached filesystem root
-        p = p.parent
+        search_path = search_path.parent
+
+    # Only print warning once, after all attempts
+    logger.warning(f"Config.xlsx not found in package or any parent directory starting from {package_path}")
     return None
 
 def get_config_value(config_file_path: Path, config_key: str) -> Optional[str]:
