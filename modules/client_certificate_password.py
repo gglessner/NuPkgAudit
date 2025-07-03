@@ -128,11 +128,13 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                 # Use root package name if provided, otherwise use current package name
                 package_name = root_package_name if root_package_name else root_package.name
                 
-                # Create description based on whether it was resolved
+                # Create description and content based on whether it was resolved
                 if resolved_value:
-                    description = f'Hard-coded {attr_name} detected (resolved from In_Config: {original_value} -> {resolved_value})'
+                    description = f'Hard-coded {attr_name} detected'
+                    content = f'{match.group(0).strip()} -> {resolved_value}'
                 else:
                     description = f'Hard-coded {attr_name} detected'
+                    content = match.group(0).strip()
                 
                 issues.append({
                     'type': 'client_certificate_password',
@@ -140,7 +142,7 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                     'description': description,
                     'file': str(file_path),
                     'line': line_num,
-                    'line_content': match.group(0).strip(),
+                    'line_content': content,
                     'package_name': package_name,
                     'module': 'client_certificate_password'
                 })
@@ -151,6 +153,7 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
 def is_variable_format(value: str) -> bool:
     """
     Check if a value is in variable format [variable_name] or {x:Null}.
+    Note: In_Config patterns are NOT considered safe - they should be resolved and checked.
     
     Args:
         value: The value to check
@@ -159,7 +162,13 @@ def is_variable_format(value: str) -> bool:
         True if it's in variable format, False otherwise
     """
     stripped_value = value.strip()
-    return (stripped_value.startswith('[') and stripped_value.endswith(']')) or stripped_value == '{x:Null}'
+    # Only consider simple variable format [variable_name] as safe, not In_Config patterns
+    if stripped_value.startswith('[') and stripped_value.endswith(']'):
+        # Check if it's an In_Config pattern - if so, it's NOT safe
+        if 'In_Config' in stripped_value:
+            return False
+        return True
+    return stripped_value == '{x:Null}'
 
 def find_line_number(content: str, search_text: str) -> int:
     """
