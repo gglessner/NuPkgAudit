@@ -415,8 +415,13 @@ Examples:
         else:
             sys.exit(0)  # Exit successfully if no issues
             
+    except UnicodeDecodeError as ude:
+        logger.error(f"UnicodeDecodeError: {ude}. Problematic string: {ude.object[ude.start:ude.end]}")
+        sys.exit(1)
     except Exception as e:
         logger.error(f"Audit failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 if __name__ == '__main__':
