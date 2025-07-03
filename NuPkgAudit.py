@@ -180,16 +180,12 @@ class UIPathSecurityAuditorV3:
             # Only print INFO for top-level subdirectories
             print_info = dir_path in top_level_directories
             
-            # Determine the root package name (the top-level directory name)
-            root_package_name = None
-            if dir_path in top_level_directories:
+            # Always determine the root package name as the first directory under the working directory
+            try:
+                rel = dir_path.relative_to(self.scan_directory)
+                root_package_name = rel.parts[0] if len(rel.parts) > 0 else dir_path.name
+            except Exception:
                 root_package_name = dir_path.name
-            else:
-                # Find the top-level directory that contains this subdirectory
-                for top_dir in top_level_directories:
-                    if dir_path.is_relative_to(top_dir):
-                        root_package_name = top_dir.name
-                        break
             
             package_results = self.scan_package(dir_path, print_info=print_info, root_package_name=root_package_name)
             self.results['packages'][dir_path.name] = package_results
