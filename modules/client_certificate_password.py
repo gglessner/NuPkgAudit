@@ -107,7 +107,7 @@ def scan_xaml_file(file_path: Path, root_package: Path) -> List[Dict[str, Any]]:
 
 def is_variable_format(value: str) -> bool:
     """
-    Check if a value is in variable format [variable_name].
+    Check if a value is in variable format [variable_name] or {x:Null}.
     
     Args:
         value: The value to check
@@ -115,7 +115,8 @@ def is_variable_format(value: str) -> bool:
     Returns:
         True if it's in variable format, False otherwise
     """
-    return value.strip().startswith('[') and value.strip().endswith(']')
+    stripped_value = value.strip()
+    return (stripped_value.startswith('[') and stripped_value.endswith(']')) or stripped_value == '{x:Null}'
 
 def find_line_number(content: str, search_text: str) -> int:
     """
