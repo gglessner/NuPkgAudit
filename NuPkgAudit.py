@@ -215,32 +215,16 @@ class UIPathSecurityAuditorV3:
         if not self.scan_directory.exists():
             raise FileNotFoundError(f"Directory not found: {self.scan_directory}")
         
-        # Recursively find all subdirectories (at any depth)
-        all_directories = [d for d in self.scan_directory.rglob('*') if d.is_dir()]
-        # Also include the immediate subdirectories (top-level)
+        # Only include immediate subdirectories (top-level packages)
         top_level_directories = [d for d in self.scan_directory.iterdir() if d.is_dir()]
-        
-        # Sort directories alphabetically
-        all_directories.sort()
         top_level_directories.sort()
-        
-        logger.info(f"Found {len(all_directories)} directories to scan in alphabetical order")
+        logger.info(f"Found {len(top_level_directories)} top-level package directories to scan in alphabetical order")
         logger.info(f"Using {len(self.modules)} modules")
         
-        for dir_path in all_directories:
-            # Only print INFO for top-level subdirectories
-            print_info = dir_path in top_level_directories
-            
-            # Always determine the root package name as the first directory under the working directory
-            try:
-                rel = dir_path.relative_to(self.scan_directory)
-                root_package_name = rel.parts[0] if len(rel.parts) > 0 else dir_path.name
-            except Exception:
-                root_package_name = dir_path.name
-            
+        for dir_path in top_level_directories:
+            print_info = True
+            root_package_name = dir_path.name
             package_results = self.scan_package(dir_path, print_info=print_info, root_package_name=root_package_name)
-            
-            # Use root_package_name as the key, not dir_path.name
             if root_package_name not in self.results['packages']:
                 self.results['packages'][root_package_name] = package_results
                 self.results['total_packages'] += 1
@@ -248,29 +232,21 @@ class UIPathSecurityAuditorV3:
                 # Merge issues from subdirectories into the existing package, avoiding duplicates
                 existing_issues = self.results['packages'][root_package_name]['issues']
                 existing_keys = set()
-                
-                # Create unique keys for existing issues
                 for issue in existing_issues:
                     key = (issue.get('file', ''), issue.get('line', 0), issue.get('module', ''), issue.get('description', ''))
                     existing_keys.add(key)
-                
-                # Only add new issues that don't already exist
                 new_issues = []
                 for issue in package_results['issues']:
                     key = (issue.get('file', ''), issue.get('line', 0), issue.get('module', ''), issue.get('description', ''))
                     if key not in existing_keys:
                         new_issues.append(issue)
                         existing_keys.add(key)
-                
                 self.results['packages'][root_package_name]['issues'].extend(new_issues)
                 self.results['packages'][root_package_name]['issue_count'] = len(self.results['packages'][root_package_name]['issues'])
-            
             if package_results['issue_count'] > 0:
-                # Only increment if this is a new package
                 if root_package_name not in [p['package_name'] for p in self.results['packages'].values() if p['issue_count'] > 0]:
                     self.results['packages_with_issues'] += 1
                 self.results['total_issues'] += package_results['issue_count']
-        
         return self.results
     
     def generate_report(self, output_file: str = None, severity_filter: set = None) -> str:
