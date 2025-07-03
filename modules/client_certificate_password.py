@@ -26,11 +26,13 @@ import logging
 import sys
 from pathlib import Path
 from typing import List, Dict, Any
+import html
 
 # Add the libraries directory to the path
 sys.path.append(str(Path(__file__).parent.parent / 'libraries'))
 
 from config_helper import resolve_in_config_value
+from highlight_helper import highlight_match
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +115,8 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
             attr_name = match.group(1)
             attr_value = match.group(2)
             matched_text = match.group(0)
+            # Decode XML entities in attribute value
+            attr_value = html.unescape(attr_value)
             
             # Use the improved helper to resolve any in_config inside brackets
             resolved_value = resolve_in_config_value(attr_value, root_package)
@@ -123,41 +127,46 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                 check_value = attr_value
                 original_value = attr_value
             
-            # Only report if not in [variable] format and not {x:Null}
-            if not is_variable_format(check_value):
-                line_num = find_line_number(content, matched_text)
-                package_name = root_package_name if root_package_name else root_package.name
-                
-                # Get the full line content
-                full_line = lines[line_num - 1] if line_num > 0 and line_num <= len(lines) else ""
-                
-                # Determine if this is an In_Config/in_config pattern
-                is_in_config = False
-                if 'in_config' in attr_value.lower() or 'inconfig' in attr_value.lower():
-                    is_in_config = True
-                
+            # Determine if this is an In_Config/in_config pattern
+            is_in_config = False
+            if 'in_config' in attr_value.lower() or 'inconfig' in attr_value.lower():
+                is_in_config = True
+
+            if is_in_config:
                 if resolved_value:
                     description = f'Hard-coded {attr_name} detected'
-                    content_line = f'{matched_text.strip()} -> {resolved_value}'
-                elif is_in_config:
-                    description = f'Hard-coded {attr_name} detected'
-                    content_line = f'{matched_text.strip()} -> Value not in Config.xlsx'
+                    content_line = f'{matched_text.strip()} -> {highlight_match(resolved_value, resolved_value)}'
+                    severity = 'HIGH'
                 else:
                     description = f'Hard-coded {attr_name} detected'
-                    content_line = matched_text.strip()
-                
-                issues.append({
-                    'type': 'client_certificate_password',
-                    'severity': 'HIGH',
-                    'description': description,
-                    'file': str(file_path),
-                    'line': line_num,
-                    'line_content': content_line,
-                    'full_line': full_line,
-                    'matched_text': matched_text,
-                    'package_name': package_name,
-                    'module': 'client_certificate_password'
-                })
+                    missing_str = 'Value not in Config.xlsx'
+                    content_line = f'{matched_text.strip()} -> {highlight_match(missing_str, missing_str)}'
+                    severity = 'FALSE-POSITIVE'
+            elif not is_variable_format(check_value):
+                description = f'Hard-coded {attr_name} detected'
+                content_line = matched_text.strip()
+                severity = 'HIGH'
+            else:
+                continue  # Safe variable or {x:Null}, skip
+            
+            line_num = find_line_number(content, matched_text)
+            package_name = root_package_name if root_package_name else root_package.name
+            
+            # Get the full line content
+            full_line = lines[line_num - 1] if line_num > 0 and line_num <= len(lines) else ""
+            
+            issues.append({
+                'type': 'client_certificate_password',
+                'severity': severity,
+                'description': description,
+                'file': str(file_path),
+                'line': line_num,
+                'line_content': content_line,
+                'full_line': full_line,
+                'matched_text': matched_text,
+                'package_name': package_name,
+                'module': 'client_certificate_password'
+            })
     except Exception as e:
         logger.warning(f"Error reading file {file_path}: {str(e)}")
     return issues

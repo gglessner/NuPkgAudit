@@ -45,49 +45,11 @@ except ImportError:
     class Style:
         RESET_ALL = '\033[0m'
 
+from libraries.highlight_helper import highlight_match
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-def highlight_match(full_line: str, matched_text: str) -> str:
-    """
-    Highlight the matched text in yellow within the full line.
-    Uses colorama for cross-platform compatibility.
-    
-    Args:
-        full_line: The complete line content
-        matched_text: The text that was matched by the regex
-        
-    Returns:
-        The line with the matched text highlighted in yellow
-    """
-    if not full_line or not matched_text:
-        return full_line
-    
-    # Escape special regex characters in matched_text
-    escaped_match = re.escape(matched_text.strip())
-    
-    # Use colorama for cross-platform color support
-    if COLORAMA_AVAILABLE:
-        yellow_start = Fore.YELLOW
-        yellow_end = Style.RESET_ALL
-    else:
-        # Fallback to ANSI codes (may not work on all Windows terminals)
-        yellow_start = '\033[93m'
-        yellow_end = '\033[0m'
-    
-    def highlight_repl(match):
-        return f'{yellow_start}{match.group(0)}{yellow_end}'
-    
-    # Replace the matched text with highlighted version using a function to avoid escape issues
-    highlighted_line = re.sub(
-        escaped_match,
-        highlight_repl,
-        full_line,
-        flags=re.IGNORECASE
-    )
-    
-    return highlighted_line
 
 class UIPathSecurityAuditorV3:
     """Modular security auditor for UIPath automation packages."""
@@ -285,7 +247,7 @@ class UIPathSecurityAuditorV3:
         report_lines.append("")
         
         # Issues by Severity
-        severity_counts = {'HIGH': 0, 'MEDIUM': 0, 'LOW': 0, 'INFO': 0, 'ERROR': 0}
+        severity_counts = {'HIGH': 0, 'MEDIUM': 0, 'LOW': 0, 'INFO': 0, 'ERROR': 0, 'FALSE-POSITIVE': 0}
         for package in filtered_results['packages'].values():
             for issue in package['issues']:
                 severity_counts[issue['severity']] += 1
@@ -373,6 +335,7 @@ Examples:
     parser.add_argument('--sev-medium', action='store_true', help='Only show MEDIUM severity findings')
     parser.add_argument('--sev-low', action='store_true', help='Only show LOW severity findings')
     parser.add_argument('--sev-info', action='store_true', help='Only show INFO severity findings')
+    parser.add_argument('--sev-fp', action='store_true', help='Include FALSE-POSITIVE findings')
     
     args = parser.parse_args()
     
@@ -390,9 +353,11 @@ Examples:
             selected_severities.add('LOW')
         if args.sev_info:
             selected_severities.add('INFO')
+        if args.sev_fp:
+            selected_severities.add('FALSE-POSITIVE')
         # If no filter is set, include all
         if not selected_severities:
-            selected_severities = {'HIGH', 'MEDIUM', 'LOW', 'INFO', 'ERROR'}
+            selected_severities = {'ERROR', 'HIGH', 'MEDIUM', 'LOW', 'INFO'}
         
         # Create auditor and scan packages
         auditor = UIPathSecurityAuditorV3(args.directory, args.modules)

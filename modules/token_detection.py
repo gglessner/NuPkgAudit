@@ -31,14 +31,17 @@ from typing import List, Dict, Any
 sys.path.append(str(Path(__file__).parent.parent / 'libraries'))
 
 from config_helper import resolve_in_config_value
-from NuPkgAudit import highlight_match
+from highlight_helper import highlight_match
 
 logger = logging.getLogger(__name__)
 
-# Regex pattern to match Token attributes
-# Matches Token=, in_Token=, out_Token=
+# Regex pattern to match Token and OAuth token attributes
+# Matches Token=, in_Token=, out_Token=, OAuth1Token=, OAuth1TokenSecret=, OAuth2Token=
 TOKEN_ATTR_PATTERN = re.compile(
-    r'\b(?:in_|out_)?Token\s*=\s*"([^"]+)"',
+    r'\b(?:in_|out_)?Token\s*=\s*"([^"]+)"'  # Token, in_Token, out_Token
+    r'|\bOAuth1Token\s*=\s*"([^"]+)"'       # OAuth1Token
+    r'|\bOAuth1TokenSecret\s*=\s*"([^"]+)"' # OAuth1TokenSecret
+    r'|\bOAuth2Token\s*=\s*"([^"]+)"',      # OAuth2Token
     re.IGNORECASE | re.MULTILINE
 )
 
@@ -110,7 +113,12 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
         lines = content.split('\n')
         # Use regex to find all matches, even if attribute is split across lines
         for match in TOKEN_ATTR_PATTERN.finditer(content):
-            attr_value = match.group(1)
+            # Determine which group matched
+            attr_value = None
+            for i in range(1, 5):
+                if match.group(i):
+                    attr_value = match.group(i)
+                    break
             matched_text = match.group(0)
             resolved_value = resolve_in_config_value(attr_value, root_package)
             if resolved_value:

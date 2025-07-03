@@ -31,6 +31,7 @@ from typing import List, Dict, Any
 sys.path.append(str(Path(__file__).parent.parent / 'libraries'))
 
 from config_helper import resolve_in_config_value
+from highlight_helper import highlight_match
 
 logger = logging.getLogger(__name__)
 
