@@ -76,10 +76,13 @@ def highlight_match(full_line: str, matched_text: str) -> str:
         yellow_start = '\033[93m'
         yellow_end = '\033[0m'
     
-    # Replace the matched text with highlighted version
+    def highlight_repl(match):
+        return f'{yellow_start}{match.group(0)}{yellow_end}'
+    
+    # Replace the matched text with highlighted version using a function to avoid escape issues
     highlighted_line = re.sub(
         escaped_match,
-        f'{yellow_start}{matched_text.strip()}{yellow_end}',
+        highlight_repl,
         full_line,
         flags=re.IGNORECASE
     )

@@ -132,9 +132,17 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                 # Get the full line content
                 full_line = lines[line_num - 1] if line_num > 0 and line_num <= len(lines) else ""
                 
+                # Determine if this is an In_Config/in_config pattern
+                is_in_config = False
+                if 'in_config' in attr_value.lower() or 'inconfig' in attr_value.lower():
+                    is_in_config = True
+                
                 if resolved_value:
                     description = f'Hard-coded Password detected'
                     content_line = f'{matched_text.strip()} -> {resolved_value}'
+                elif is_in_config:
+                    description = f'Hard-coded Password detected'
+                    content_line = f'{matched_text.strip()} -> Value not in Config.xlsx'
                 else:
                     description = f'Hard-coded Password detected'
                     content_line = matched_text.strip()
