@@ -121,8 +121,12 @@ class UIPathSecurityAuditorV3:
                 try:
                     logger.debug(f"Executing module {module.__name__} on package {package_name}")
                     
+                    # Each module gets its own scanned_files set to avoid duplicates within the module
+                    # but allow different modules to scan the same files
+                    module_scanned_files = set()
+                    
                     # Call the module's scan_package function with root package name and scanned files
-                    module_issues = module.scan_package(str(package_path), root_package_name=root_package_name, scanned_files=self.scanned_files)
+                    module_issues = module.scan_package(str(package_path), root_package_name=root_package_name, scanned_files=module_scanned_files)
                     
                     if module_issues:
                         package_results['issues'].extend(module_issues)
