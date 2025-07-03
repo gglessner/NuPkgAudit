@@ -136,6 +136,10 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                 is_in_config = False
                 if 'in_config' in attr_value.lower() or 'inconfig' in attr_value.lower():
                     is_in_config = True
+                
+                # Check if this is a ResponseDict pattern
+                is_response_dict_pattern_detected = is_response_dict_pattern(attr_value)
+                
                 if resolved_value:
                     description = f'Hard-coded Token detected'
                     highlighted_value = highlight_match(f'{matched_text.strip()} -> {resolved_value}', str(resolved_value))
@@ -146,6 +150,9 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                     highlighted_missing = highlight_match(f'{matched_text.strip()} -> Value not in Config.xlsx', 'Value not in Config.xlsx')
                     content_line = highlighted_missing
                     severity = 'FALSE-POSITIVE'
+                elif is_response_dict_pattern_detected:
+                    severity, description = determine_response_dict_severity_and_description(attr_value)
+                    content_line = matched_text.strip()
                 else:
                     description = f'Hard-coded Token detected'
                     content_line = matched_text.strip()
@@ -185,6 +192,10 @@ def is_variable_format(value: str) -> bool:
         if 'In_Config' in stripped_value:
             return False
         
+        # Check for ResponseDict patterns (different handling)
+        if is_response_dict_pattern(inner_content):
+            return False  # We want to flag these, but with different severity
+        
         # Check for non-empty quoted strings - indicates hardcoded values
         # Empty strings (&quot;&quot;) are often just placeholders, ignore them
         import re
@@ -208,6 +219,41 @@ def is_variable_format(value: str) -> bool:
     
     # Plain text values are not safe
     return False
+
+def is_response_dict_pattern(content: str) -> bool:
+    """
+    Check if the content represents a ResponseDict pattern.
+    Examples:
+    - ResponseDict(&quot;access_token&quot;).ToString
+    - responseDict(&quot;bearer_token&quot;).ToString
+    - ResponseDict(&quot;oauth_token&quot;).ToString
+    """
+    import re
+    
+    # Pattern to match ResponseDict and similar response access patterns
+    response_dict_patterns = [
+        r'ResponseDict\s*\(\s*&quot;[^&]+&quot;\s*\)',    # ResponseDict(&quot;key&quot;)
+        r'ResponseDict\s*\(\s*"[^"]+"\s*\)',              # ResponseDict("key")
+        r'responseDict\s*\(\s*&quot;[^&]+&quot;\s*\)',    # responseDict(&quot;key&quot;) - lowercase variant
+        r'responseDict\s*\(\s*"[^"]+"\s*\)',              # responseDict("key") - lowercase variant
+    ]
+    
+    for pattern in response_dict_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            return True
+    
+    return False
+
+def determine_response_dict_severity_and_description(attr_value: str) -> tuple:
+    """
+    Determine appropriate severity and description for ResponseDict patterns.
+    Returns (severity, description)
+    """
+    # Check for specific ResponseDict patterns
+    if 'ResponseDict' in attr_value or 'responseDict' in attr_value:
+        return 'MEDIUM', 'Token retrieved from ResponseDict - Review response source security'
+    else:
+        return 'INFO', 'Token retrieved from response dictionary - Review if source is secure'
 
 def find_line_number(content: str, search_text: str) -> int:
     """
