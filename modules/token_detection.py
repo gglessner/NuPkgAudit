@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Password Detection Module
-Scans for hardcoded password attributes in UIPath automation.
+Token Detection Module
+Scans for hardcoded token attributes in UIPath automation.
 
 Author: Garland Glessner <gglessner@gmail.com>
 License: GNU General Public License v3.0
@@ -31,29 +31,22 @@ from typing import List, Dict, Any
 sys.path.append(str(Path(__file__).parent.parent / 'libraries'))
 
 from config_helper import resolve_in_config_value
+from NuPkgAudit import highlight_match
 
 logger = logging.getLogger(__name__)
 
-# Regex pattern to match Password attributes
-# This will match even if the attribute is split across lines
-# Uses word boundaries to avoid matching ClientCertificatePassword
-# Also matches in_Password and out_Password
-PASSWORD_ATTR_PATTERN = re.compile(
-    r'\b(?:in_|out_)?Password\s*=\s*"([^"]+)"',
+# Regex pattern to match Token attributes
+# Matches Token=, in_Token=, out_Token=
+TOKEN_ATTR_PATTERN = re.compile(
+    r'\b(?:in_|out_)?Token\s*=\s*"([^"]+)"',
     re.IGNORECASE | re.MULTILINE
 )
 
-# Regex to match NetworkCredential pattern inside brackets
-NETWORK_CREDENTIAL_PATTERN = re.compile(
-    r'\[New System\.Net\.NetworkCredential\(string\.Empty, (?:&quot;|\")([^"&]+)(?:&quot;|\")\)\.SecurePassword\]',
-    re.IGNORECASE
-)
-
-MODULE_DESCRIPTION = "Detects hardcoded Password, in_Password, and out_Password attributes in .xaml files. Flags as HIGH risk if not a variable or {x:Null}."
+MODULE_DESCRIPTION = "Detects hardcoded Token, in_Token, and out_Token attributes in .xaml files. Flags as HIGH risk if not a variable or {x:Null}. Resolves In_Config/in_config patterns from Config.xlsx."
 
 def scan_package(package_path: str, root_package_name: str = None, scanned_files: set = None) -> List[Dict[str, Any]]:
     """
-    Scan a UIPath package for hardcoded passwords.
+    Scan a UIPath package for hardcoded tokens.
     
     Args:
         package_path: Path to the package directory
@@ -87,20 +80,20 @@ def scan_package(package_path: str, root_package_name: str = None, scanned_files
     except Exception as e:
         logger.error(f"Error scanning package {package_path}: {str(e)}")
         issues.append({
-            'type': 'password_detection',
+            'type': 'token_detection',
             'severity': 'HIGH',
             'description': f'Error scanning package: {str(e)}',
             'file': str(package_path),
             'line': 0,
             'line_content': '',
-            'module': 'password_detection'
+            'module': 'token_detection'
         })
     
     return issues
 
 def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str = None) -> List[Dict[str, Any]]:
     """
-    Scan a single .xaml file for hardcoded passwords.
+    Scan a single .xaml file for hardcoded tokens.
     
     Args:
         file_path: Path to the .xaml file to scan
@@ -115,60 +108,43 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
         lines = content.split('\n')
-        
         # Use regex to find all matches, even if attribute is split across lines
-        for match in PASSWORD_ATTR_PATTERN.finditer(content):
+        for match in TOKEN_ATTR_PATTERN.finditer(content):
             attr_value = match.group(1)
             matched_text = match.group(0)
-            
-            # Use the improved helper to resolve any in_config inside brackets
             resolved_value = resolve_in_config_value(attr_value, root_package)
-            # Check for NetworkCredential pattern
-            network_cred_match = NETWORK_CREDENTIAL_PATTERN.match(attr_value.strip())
-            if network_cred_match:
-                extracted_password = network_cred_match.group(1)
-            else:
-                extracted_password = None
             if resolved_value:
                 check_value = resolved_value
                 original_value = attr_value
             else:
                 check_value = attr_value
                 original_value = attr_value
-            
             # Only report if not in [variable] format and not {x:Null}
             if not is_variable_format(check_value):
                 line_num = find_line_number(content, matched_text)
                 package_name = root_package_name if root_package_name else root_package.name
-                
-                # Get the full line content
                 full_line = lines[line_num - 1] if line_num > 0 and line_num <= len(lines) else ""
-                
                 # Determine if this is an In_Config/in_config pattern
                 is_in_config = False
                 if 'in_config' in attr_value.lower() or 'inconfig' in attr_value.lower():
                     is_in_config = True
-                
-                if extracted_password:
-                    description = f'Hard-coded Password detected (NetworkCredential)'
-                    content_line = f'{matched_text.strip()} -> {extracted_password}'
-                elif resolved_value:
-                    description = f'Hard-coded Password detected'
-                    # Highlight the resolved value in yellow
+                if resolved_value:
+                    description = f'Hard-coded Token detected'
                     highlighted_value = highlight_match(f'{matched_text.strip()} -> {resolved_value}', str(resolved_value))
                     content_line = highlighted_value
+                    severity = 'HIGH'
                 elif is_in_config:
-                    description = f'Hard-coded Password detected'
+                    description = f'Hard-coded Token detected'
                     highlighted_missing = highlight_match(f'{matched_text.strip()} -> Value not in Config.xlsx', 'Value not in Config.xlsx')
                     content_line = highlighted_missing
                     severity = 'FALSE-POSITIVE'
                 else:
-                    description = f'Hard-coded Password detected'
+                    description = f'Hard-coded Token detected'
                     content_line = matched_text.strip()
                     severity = 'HIGH'
                 issues.append({
-                    'type': 'password_detection',
-                    'severity': severity if 'severity' in locals() else 'HIGH',
+                    'type': 'token_detection',
+                    'severity': severity,
                     'description': description,
                     'file': str(file_path),
                     'line': line_num,
@@ -176,7 +152,7 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                     'full_line': full_line,
                     'matched_text': matched_text,
                     'package_name': package_name,
-                    'module': 'password_detection'
+                    'module': 'token_detection'
                 })
     except Exception as e:
         logger.warning(f"Error reading file {file_path}: {str(e)}")
@@ -190,7 +166,6 @@ def is_variable_format(value: str) -> bool:
     stripped_value = value.strip()
     # Only consider simple variable format [variable_name] as safe, not In_Config patterns
     if stripped_value.startswith('[') and stripped_value.endswith(']'):
-        # Check if it's an In_Config pattern - if so, it's NOT safe
         if 'In_Config' in stripped_value:
             return False
         return True

@@ -139,17 +139,22 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                 
                 if resolved_value:
                     description = f'Hard-coded Username detected'
-                    content_line = f'{matched_text.strip()} -> {resolved_value}'
+                    # Highlight the resolved value in yellow
+                    highlighted_value = highlight_match(f'{matched_text.strip()} -> {resolved_value}', str(resolved_value))
+                    content_line = highlighted_value
                 elif is_in_config:
                     description = f'Hard-coded Username detected'
-                    content_line = f'{matched_text.strip()} -> Value not in Config.xlsx'
+                    highlighted_missing = highlight_match(f'{matched_text.strip()} -> Value not in Config.xlsx', 'Value not in Config.xlsx')
+                    content_line = highlighted_missing
+                    severity = 'FALSE-POSITIVE'
                 else:
                     description = f'Hard-coded Username detected'
                     content_line = matched_text.strip()
+                    severity = 'HIGH'
                 
                 issues.append({
                     'type': 'username_detection',
-                    'severity': 'HIGH',
+                    'severity': severity if 'severity' in locals() else 'HIGH',
                     'description': description,
                     'file': str(file_path),
                     'line': line_num,

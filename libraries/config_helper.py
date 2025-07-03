@@ -69,7 +69,7 @@ def find_config_xlsx(package_path: Path) -> Optional[Path]:
     if default_config.is_file():
         return default_config
 
-    logger.warning(f"Config.xlsx not found in default location: {default_config}")
+    # Do not print a warning here; let resolve_in_config_value handle it
     return None
 
 def get_config_value(config_file_path: Path, config_key: str) -> Optional[str]:
