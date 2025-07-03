@@ -49,6 +49,9 @@ class UIPathSecurityAuditorV3:
             'packages': {}
         }
         
+        # Track scanned files to avoid duplicates
+        self.scanned_files = set()
+        
         # Load all modules
         self.modules = self.load_modules()
         
@@ -118,8 +121,8 @@ class UIPathSecurityAuditorV3:
                 try:
                     logger.debug(f"Executing module {module.__name__} on package {package_name}")
                     
-                    # Call the module's scan_package function with root package name
-                    module_issues = module.scan_package(str(package_path), root_package_name=root_package_name)
+                    # Call the module's scan_package function with root package name and scanned files
+                    module_issues = module.scan_package(str(package_path), root_package_name=root_package_name, scanned_files=self.scanned_files)
                     
                     if module_issues:
                         package_results['issues'].extend(module_issues)

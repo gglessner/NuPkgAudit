@@ -37,13 +37,14 @@ PASSWORD_ATTR_PATTERN = re.compile(
 
 MODULE_DESCRIPTION = "Detects hardcoded ClientCertificatePassword and SecureClientCertificatePassword attributes in .xaml files. Flags as HIGH risk if not a variable or {x:Null}."
 
-def scan_package(package_path: str, root_package_name: str = None) -> List[Dict[str, Any]]:
+def scan_package(package_path: str, root_package_name: str = None, scanned_files: set = None) -> List[Dict[str, Any]]:
     """
     Scan a UIPath package for hardcoded client certificate passwords.
     
     Args:
         package_path: Path to the package directory
         root_package_name: Name of the root package directory
+        scanned_files: Set of files that have already been scanned
         
     Returns:
         List of issues found
@@ -51,10 +52,21 @@ def scan_package(package_path: str, root_package_name: str = None) -> List[Dict[
     issues = []
     package = Path(package_path)
     
+    # Initialize scanned_files if not provided
+    if scanned_files is None:
+        scanned_files = set()
+    
     try:
         # Scan all .xaml files recursively in the package
         for file_path in package.rglob('*.xaml'):
             if file_path.is_file():
+                # Skip if file has already been scanned
+                if str(file_path) in scanned_files:
+                    continue
+                
+                # Add file to scanned set
+                scanned_files.add(str(file_path))
+                
                 file_issues = scan_xaml_file(file_path, package, root_package_name)
                 if file_issues:
                     issues.extend(file_issues)
