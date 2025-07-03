@@ -40,13 +40,13 @@ logger = logging.getLogger(__name__)
 # Uses word boundaries to avoid matching ClientCertificatePassword
 # Also matches in_Password and out_Password
 PASSWORD_ATTR_PATTERN = re.compile(
-    r'\b(?:in_|out_)?Password\s*=\s*"([^"]+)"',
+    r'([\w:]*Password)\s*=\s*"([^"]+)"',
     re.IGNORECASE | re.MULTILINE
 )
 
 # Regex to match NetworkCredential pattern inside brackets
 NETWORK_CREDENTIAL_PATTERN = re.compile(
-    r'\[\s*(?:new|New)\s+System\.[Nn][Ee][Tt]\.NetworkCredential\(\s*(?:string\.Empty|&quot;&quot;)\s*,\s*&quot;([^&]+)&quot;\s*\)\.SecurePassword\s*\]',
+    r'\[\s*(?:new|New)\s+System\.[Nn][Ee][Tt]\.NetworkCredential\(\s*string\.Empty\s*,\s*&quot;([^&]+)&quot;\s*\)\.SecurePassword\s*\]',
     re.IGNORECASE
 )
 
@@ -117,9 +117,8 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
             content = f.read()
         lines = content.split('\n')
         
-        # Use regex to find all matches, even if attribute is split across lines
         for match in PASSWORD_ATTR_PATTERN.finditer(content):
-            attr_value = match.group(1)
+            attr_value = match.group(2)
             matched_text = match.group(0)
             
             # Use the improved helper to resolve any in_config inside brackets
@@ -179,6 +178,9 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                     'package_name': package_name,
                     'module': 'password_detection'
                 })
+                if 'NetworkCredential' in attr_value:
+                    logger.info(f"NetworkCredential attribute value: {attr_value}")
+                logger.info(f"Extracted password attribute value: {attr_value}")
     except Exception as e:
         logger.warning(f"Error reading file {file_path}: {str(e)}")
     return issues
@@ -186,13 +188,16 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
 def is_variable_format(value: str) -> bool:
     """
     Check if a value is in variable format [variable_name] or {x:Null}.
-    Note: In_Config patterns are NOT considered safe - they should be resolved and checked.
+    Note: In_Config patterns and NetworkCredential patterns are NOT considered safe - they should be reported.
     """
     stripped_value = value.strip()
-    # Only consider simple variable format [variable_name] as safe, not In_Config patterns
+    # Only consider simple variable format [variable_name] as safe, not In_Config or NetworkCredential patterns
     if stripped_value.startswith('[') and stripped_value.endswith(']'):
         # Check if it's an In_Config pattern - if so, it's NOT safe
         if 'In_Config' in stripped_value:
+            return False
+        # Check if it's a NetworkCredential pattern - if so, it's NOT safe
+        if 'NetworkCredential' in stripped_value:
             return False
         return True
     return stripped_value == '{x:Null}'

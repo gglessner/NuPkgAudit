@@ -174,7 +174,7 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
 def is_variable_format(value: str) -> bool:
     """
     Check if a value is in variable format [variable_name] or {x:Null}.
-    Note: In_Config patterns are NOT considered safe - they should be resolved and checked.
+    Note: In_Config patterns and .NET expressions are NOT considered safe - they should be reported.
     
     Args:
         value: The value to check
@@ -183,10 +183,16 @@ def is_variable_format(value: str) -> bool:
         True if it's in variable format, False otherwise
     """
     stripped_value = value.strip()
-    # Only consider simple variable format [variable_name] as safe, not In_Config patterns
+    # Only consider simple variable format [variable_name] as safe
     if stripped_value.startswith('[') and stripped_value.endswith(']'):
         # Check if it's an In_Config pattern - if so, it's NOT safe
         if 'In_Config' in stripped_value:
+            return False
+        # Check if it contains .NET method calls, constructors, or complex expressions - if so, it's NOT safe
+        if any(pattern in stripped_value for pattern in [
+            'NetworkCredential', 'DirectCast', 'SecureString', 'Convert.',
+            'System.', 'new ', 'New ', '(', ')', '.', '&quot;', '"'
+        ]):
             return False
         return True
     return stripped_value == '{x:Null}'
