@@ -27,13 +27,64 @@ import logging
 import os
 import sys
 import importlib.util
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
 
+# Import colorama for cross-platform color support
+try:
+    from colorama import init, Fore, Back, Style
+    init()  # Initialize colorama for cross-platform support
+    COLORAMA_AVAILABLE = True
+except ImportError:
+    COLORAMA_AVAILABLE = False
+    # Fallback color codes (may not work on all Windows terminals)
+    class Fore:
+        YELLOW = '\033[93m'
+    class Style:
+        RESET_ALL = '\033[0m'
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+def highlight_match(full_line: str, matched_text: str) -> str:
+    """
+    Highlight the matched text in yellow within the full line.
+    Uses colorama for cross-platform compatibility.
+    
+    Args:
+        full_line: The complete line content
+        matched_text: The text that was matched by the regex
+        
+    Returns:
+        The line with the matched text highlighted in yellow
+    """
+    if not full_line or not matched_text:
+        return full_line
+    
+    # Escape special regex characters in matched_text
+    escaped_match = re.escape(matched_text.strip())
+    
+    # Use colorama for cross-platform color support
+    if COLORAMA_AVAILABLE:
+        yellow_start = Fore.YELLOW
+        yellow_end = Style.RESET_ALL
+    else:
+        # Fallback to ANSI codes (may not work on all Windows terminals)
+        yellow_start = '\033[93m'
+        yellow_end = '\033[0m'
+    
+    # Replace the matched text with highlighted version
+    highlighted_line = re.sub(
+        escaped_match,
+        f'{yellow_start}{matched_text.strip()}{yellow_end}',
+        full_line,
+        flags=re.IGNORECASE
+    )
+    
+    return highlighted_line
 
 class UIPathSecurityAuditorV3:
     """Modular security auditor for UIPath automation packages."""
@@ -284,6 +335,9 @@ class UIPathSecurityAuditorV3:
                     if issue.get('line', 0) > 0:
                         report_lines.append(f"    Line: {issue['line']}")
                     report_lines.append(f"    Content: {issue['line_content']}")
+                    if issue.get('full_line') and issue.get('matched_text'):
+                        highlighted_context = highlight_match(issue['full_line'], issue['matched_text'])
+                        report_lines.append(f"    Context: {highlighted_context}")
                     if issue.get('module'):
                         report_lines.append(f"    Module: {issue['module']}")
                     report_lines.append("")

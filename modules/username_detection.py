@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Client Certificate Password Detection Module
-Scans for hardcoded credentials in UIPath automation.
+Username Detection Module
+Scans for hardcoded username attributes in UIPath automation.
 
 Author: Garland Glessner <gglessner@gmail.com>
 License: GNU General Public License v3.0
@@ -34,18 +34,20 @@ from config_helper import resolve_in_config_value
 
 logger = logging.getLogger(__name__)
 
-# Regex pattern to match both ClientCertificatePassword and SecureClientCertificatePassword attributes
+# Regex pattern to match Username attributes
 # This will match even if the attribute is split across lines
-PASSWORD_ATTR_PATTERN = re.compile(
-    r'(ClientCertificatePassword|SecureClientCertificatePassword)\s*=\s*"([^"]+)"',
+# Uses word boundaries to avoid matching other attributes
+# Also matches in_Username and out_Username
+USERNAME_ATTR_PATTERN = re.compile(
+    r'\b(?:in_|out_)?Username\s*=\s*"([^"]+)"',
     re.IGNORECASE | re.MULTILINE
 )
 
-MODULE_DESCRIPTION = "Detects hardcoded ClientCertificatePassword and SecureClientCertificatePassword attributes in .xaml files. Flags as HIGH risk if not a variable or {x:Null}."
+MODULE_DESCRIPTION = "Detects hardcoded Username, in_Username, and out_Username attributes in .xaml files. Flags as HIGH risk if not a variable or {x:Null}."
 
 def scan_package(package_path: str, root_package_name: str = None, scanned_files: set = None) -> List[Dict[str, Any]]:
     """
-    Scan a UIPath package for hardcoded client certificate passwords.
+    Scan a UIPath package for hardcoded usernames.
     
     Args:
         package_path: Path to the package directory
@@ -79,20 +81,20 @@ def scan_package(package_path: str, root_package_name: str = None, scanned_files
     except Exception as e:
         logger.error(f"Error scanning package {package_path}: {str(e)}")
         issues.append({
-            'type': 'client_certificate_password',
+            'type': 'username_detection',
             'severity': 'HIGH',
             'description': f'Error scanning package: {str(e)}',
             'file': str(package_path),
             'line': 0,
             'line_content': '',
-            'module': 'client_certificate_password'
+            'module': 'username_detection'
         })
     
     return issues
 
 def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str = None) -> List[Dict[str, Any]]:
     """
-    Scan a single .xaml file for hardcoded client certificate passwords.
+    Scan a single .xaml file for hardcoded usernames.
     
     Args:
         file_path: Path to the .xaml file to scan
@@ -109,9 +111,8 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
         lines = content.split('\n')
         
         # Use regex to find all matches, even if attribute is split across lines
-        for match in PASSWORD_ATTR_PATTERN.finditer(content):
-            attr_name = match.group(1)
-            attr_value = match.group(2)
+        for match in USERNAME_ATTR_PATTERN.finditer(content):
+            attr_value = match.group(1)
             matched_text = match.group(0)
             
             # Use the improved helper to resolve any in_config inside brackets
@@ -132,14 +133,14 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                 full_line = lines[line_num - 1] if line_num > 0 and line_num <= len(lines) else ""
                 
                 if resolved_value:
-                    description = f'Hard-coded {attr_name} detected'
+                    description = f'Hard-coded Username detected'
                     content_line = f'{matched_text.strip()} -> {resolved_value}'
                 else:
-                    description = f'Hard-coded {attr_name} detected'
+                    description = f'Hard-coded Username detected'
                     content_line = matched_text.strip()
                 
                 issues.append({
-                    'type': 'client_certificate_password',
+                    'type': 'username_detection',
                     'severity': 'HIGH',
                     'description': description,
                     'file': str(file_path),
@@ -148,7 +149,7 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                     'full_line': full_line,
                     'matched_text': matched_text,
                     'package_name': package_name,
-                    'module': 'client_certificate_password'
+                    'module': 'username_detection'
                 })
     except Exception as e:
         logger.warning(f"Error reading file {file_path}: {str(e)}")
@@ -158,12 +159,6 @@ def is_variable_format(value: str) -> bool:
     """
     Check if a value is in variable format [variable_name] or {x:Null}.
     Note: In_Config patterns are NOT considered safe - they should be resolved and checked.
-    
-    Args:
-        value: The value to check
-        
-    Returns:
-        True if it's in variable format, False otherwise
     """
     stripped_value = value.strip()
     # Only consider simple variable format [variable_name] as safe, not In_Config patterns
@@ -177,13 +172,6 @@ def is_variable_format(value: str) -> bool:
 def find_line_number(content: str, search_text: str) -> int:
     """
     Find the line number for a specific text in the content.
-    
-    Args:
-        content: The file content
-        search_text: The text to search for
-        
-    Returns:
-        Line number (1-indexed)
     """
     lines = content.split('\n')
     for line_num, line in enumerate(lines, 1):

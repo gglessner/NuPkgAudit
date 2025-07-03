@@ -101,34 +101,55 @@ def get_config_value(config_file_path: Path, config_key: str) -> Optional[str]:
         logger.error(f"Error reading Config.xlsx file {config_file_path}: {str(e)}")
         return None
 
+def extract_in_config_key_from_brackets(value: str) -> Optional[str]:
+    """
+    Extract the config key from any [ ... ] expression containing in_config("key") or in_config(&quot;key"), case-insensitive.
+    Handles nesting, e.g. [DirectCast(in_config("My_pass"),SecureString)]
+    Args:
+        value: The value to parse (e.g., '[DirectCast(in_config("My_pass"),SecureString)]')
+    Returns:
+        The config key if found, else None
+    """
+    # Only process if value is in square brackets
+    bracket_pattern = r'^\s*\[(.*)\]\s*$'
+    m = re.match(bracket_pattern, value.strip())
+    if not m:
+        return None
+    inner = m.group(1)
+    # Look for in_config("key") or in_config(&quot;key") (case-insensitive)
+    in_config_pattern = r'in_config\s*\(\s*(?:&quot;|")([^"&]+)(?:&quot;|")\s*\)'
+    match = re.search(in_config_pattern, inner, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return None
+
 def resolve_in_config_value(value: str, package_path: Path) -> Optional[str]:
     """
-    Resolve an In_Config pattern to its actual value from Config.xlsx.
-    
+    Resolve an In_Config or in_config pattern to its actual value from Config.xlsx.
+    Handles both [In_Config("key").ToString] and [DirectCast(in_config("key"),...)] and similar.
     Args:
-        value: The value to resolve (e.g., '[In_Config(&quot;CertPass&quot;).ToString]')
+        value: The value to resolve (e.g., '[In_Config("CertPass").ToString]' or '[DirectCast(in_config("My_pass"),SecureString)]')
         package_path: Path to the package directory
-        
     Returns:
         The resolved value if found, None otherwise
     """
-    # Parse the In_Config pattern
+    # Try original In_Config pattern
     parsed = parse_in_config_pattern(value)
-    if not parsed:
+    if parsed:
+        config_key, _ = parsed
+    else:
+        # Try generic in_config inside brackets
+        config_key = extract_in_config_key_from_brackets(value)
+    if not config_key:
         return None
-    
-    config_key, original_value = parsed
-    
     # Find Config.xlsx file
     config_file = find_config_xlsx(package_path)
     if not config_file:
         logger.warning(f"Config.xlsx not found in package {package_path}")
         return None
-    
     # Get the configuration value
     config_value = get_config_value(config_file, config_key)
     if config_value:
-        logger.info(f"Resolved In_Config '{config_key}' to value from {config_file}")
+        logger.info(f"Resolved in_config '{config_key}' to value from {config_file}")
         return config_value
-    
     return None 

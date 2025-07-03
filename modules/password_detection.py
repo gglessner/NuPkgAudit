@@ -108,34 +108,36 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
     try:
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
+        lines = content.split('\n')
+        
         # Use regex to find all matches, even if attribute is split across lines
         for match in PASSWORD_ATTR_PATTERN.finditer(content):
             attr_value = match.group(1)
+            matched_text = match.group(0)
             
-            # Check if it's an In_Config pattern and resolve it
+            # Use the improved helper to resolve any in_config inside brackets
             resolved_value = resolve_in_config_value(attr_value, root_package)
             if resolved_value:
-                # Use the resolved value for checking
                 check_value = resolved_value
                 original_value = attr_value
             else:
-                # Use the original value
                 check_value = attr_value
                 original_value = attr_value
             
             # Only report if not in [variable] format and not {x:Null}
             if not is_variable_format(check_value):
-                line_num = find_line_number(content, match.group(0))
-                # Use root package name if provided, otherwise use current package name
+                line_num = find_line_number(content, matched_text)
                 package_name = root_package_name if root_package_name else root_package.name
                 
-                # Create description and content based on whether it was resolved
+                # Get the full line content
+                full_line = lines[line_num - 1] if line_num > 0 and line_num <= len(lines) else ""
+                
                 if resolved_value:
                     description = f'Hard-coded Password detected'
-                    content = f'{match.group(0).strip()} -> {resolved_value}'
+                    content_line = f'{matched_text.strip()} -> {resolved_value}'
                 else:
                     description = f'Hard-coded Password detected'
-                    content = match.group(0).strip()
+                    content_line = matched_text.strip()
                 
                 issues.append({
                     'type': 'password_detection',
@@ -143,7 +145,9 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                     'description': description,
                     'file': str(file_path),
                     'line': line_num,
-                    'line_content': content,
+                    'line_content': content_line,
+                    'full_line': full_line,
+                    'matched_text': matched_text,
                     'package_name': package_name,
                     'module': 'password_detection'
                 })
