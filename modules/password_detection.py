@@ -43,6 +43,12 @@ PASSWORD_ATTR_PATTERN = re.compile(
     re.IGNORECASE | re.MULTILINE
 )
 
+# Regex to match NetworkCredential pattern inside brackets
+NETWORK_CREDENTIAL_PATTERN = re.compile(
+    r'\[New System\.Net\.NetworkCredential\(string\.Empty, (?:&quot;|\")([^"&]+)(?:&quot;|\")\)\.SecurePassword\]',
+    re.IGNORECASE
+)
+
 MODULE_DESCRIPTION = "Detects hardcoded Password, in_Password, and out_Password attributes in .xaml files. Flags as HIGH risk if not a variable or {x:Null}."
 
 def scan_package(package_path: str, root_package_name: str = None, scanned_files: set = None) -> List[Dict[str, Any]]:
@@ -117,6 +123,12 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
             
             # Use the improved helper to resolve any in_config inside brackets
             resolved_value = resolve_in_config_value(attr_value, root_package)
+            # Check for NetworkCredential pattern
+            network_cred_match = NETWORK_CREDENTIAL_PATTERN.match(attr_value.strip())
+            if network_cred_match:
+                extracted_password = network_cred_match.group(1)
+            else:
+                extracted_password = None
             if resolved_value:
                 check_value = resolved_value
                 original_value = attr_value
@@ -137,7 +149,10 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                 if 'in_config' in attr_value.lower() or 'inconfig' in attr_value.lower():
                     is_in_config = True
                 
-                if resolved_value:
+                if extracted_password:
+                    description = f'Hard-coded Password detected (NetworkCredential)'
+                    content_line = f'{matched_text.strip()} -> {extracted_password}'
+                elif resolved_value:
                     description = f'Hard-coded Password detected'
                     content_line = f'{matched_text.strip()} -> {resolved_value}'
                 elif is_in_config:
