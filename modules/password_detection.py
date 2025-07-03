@@ -203,10 +203,13 @@ def is_variable_format(value: str) -> bool:
         if 'In_Config' in stripped_value:
             return False
         
-        # Check if this contains hardcoded string literals (quoted values)
-        # Look for patterns like "hardcodedvalue" or &quot;hardcodedvalue&quot;
-        if '&quot;' in inner_content or '"' in inner_content:
-            # If it contains quoted strings, it's likely hardcoded
+        # Check for non-empty quoted strings - indicates hardcoded values
+        # Empty strings (&quot;&quot;) are often just placeholders, ignore them
+        import re
+        quoted_patterns = re.findall(r'&quot;([^&]*)&quot;|"([^"]*)"', inner_content)
+        has_hardcoded_values = any(match[0] or match[1] for match in quoted_patterns if (match[0] or match[1]).strip())
+        
+        if has_hardcoded_values:
             return False
         
         # Check for .NET expressions that might contain variables (unquoted references)
