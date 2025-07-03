@@ -181,6 +181,11 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                 # Check if this is a DirectCast in_Config pattern
                 is_directcast_in_config_pattern_detected = is_directcast_in_config_pattern(attr_value)
                 
+                # Determine if this is an In_Config/in_config pattern
+                is_in_config = False
+                if ('in_config' in attr_value.lower() or 'inconfig' in attr_value.lower()) and '[' in attr_value and ']' in attr_value:
+                    is_in_config = True
+                
                 if is_networkcredential_dynamic_pattern_detected:
                     severity, description = determine_networkcredential_dynamic_severity_and_description(attr_value)
                     content_line = matched_text.strip()
@@ -194,6 +199,11 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                     highlighted_value = highlight_match(f'{matched_text.strip()} -> {resolved_value}', str(resolved_value))
                     content_line = highlighted_value
                     severity = 'HIGH'
+                elif is_in_config:
+                    description = f'Hard-coded {attr_name} detected'
+                    highlighted_missing = highlight_match(f'{matched_text.strip()} -> Value not in Config.xlsx', 'Value not in Config.xlsx')
+                    content_line = highlighted_missing
+                    severity = 'FALSE-POSITIVE'
                 elif is_auth_data_pattern:
                     severity, description = determine_authentication_data_severity_and_description(attr_value)
                     content_line = matched_text.strip()
@@ -216,11 +226,25 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                     severity, description = determine_trycast_config_data_severity_and_description(attr_value)
                     content_line = matched_text.strip()
                 elif is_trycast_in_config_pattern_detected:
-                    severity, description = determine_trycast_in_config_severity_and_description(attr_value)
-                    content_line = matched_text.strip()
+                    # Check if this was an unresolved in_config pattern
+                    if resolved_value is None and is_in_config:
+                        description = f'Hard-coded {attr_name} detected'
+                        highlighted_missing = highlight_match(f'{matched_text.strip()} -> Value not in Config.xlsx', 'Value not in Config.xlsx')
+                        content_line = highlighted_missing
+                        severity = 'FALSE-POSITIVE'
+                    else:
+                        severity, description = determine_trycast_in_config_severity_and_description(attr_value)
+                        content_line = matched_text.strip()
                 elif is_directcast_in_config_pattern_detected:
-                    severity, description = determine_directcast_in_config_severity_and_description(attr_value)
-                    content_line = matched_text.strip()
+                    # Check if this was an unresolved in_config pattern
+                    if resolved_value is None and is_in_config:
+                        description = f'Hard-coded {attr_name} detected'
+                        highlighted_missing = highlight_match(f'{matched_text.strip()} -> Value not in Config.xlsx', 'Value not in Config.xlsx')
+                        content_line = highlighted_missing
+                        severity = 'FALSE-POSITIVE'
+                    else:
+                        severity, description = determine_directcast_in_config_severity_and_description(attr_value)
+                        content_line = matched_text.strip()
                 else:
                     description = f'Hard-coded {attr_name} detected'
                     content_line = matched_text.strip()
@@ -259,7 +283,7 @@ def is_variable_format(value: str) -> bool:
         inner_content = stripped_value[1:-1].strip()
         
         # In_Config patterns should always be resolved and checked
-        if 'In_Config' in stripped_value:
+        if 'in_config' in stripped_value.lower():
             return False
         
         # Check for in_AuthenticationData patterns (different handling)
