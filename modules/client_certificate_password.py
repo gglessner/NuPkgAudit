@@ -131,6 +131,9 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
             is_in_config = False
             if 'in_config' in attr_value.lower() or 'inconfig' in attr_value.lower():
                 is_in_config = True
+                
+            # Check if this is an io_Config pattern
+            is_io_config_pattern_detected = is_io_config_pattern(attr_value)
 
             if is_in_config:
                 if resolved_value:
@@ -142,6 +145,9 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                     missing_str = 'Value not in Config.xlsx'
                     content_line = f'{matched_text.strip()} -> {highlight_match(missing_str, missing_str)}'
                     severity = 'FALSE-POSITIVE'
+            elif is_io_config_pattern_detected:
+                severity, description = determine_io_config_severity_and_description(attr_value, attr_name)
+                content_line = matched_text.strip()
             elif not is_variable_format(check_value):
                 description = f'Hard-coded {attr_name} detected'
                 content_line = matched_text.strip()
@@ -196,6 +202,10 @@ def is_variable_format(value: str) -> bool:
         if 'In_Config' in stripped_value:
             return False
         
+        # Check for io_Config patterns (different handling)
+        if is_io_config_pattern(inner_content):
+            return False  # We want to flag these, but with different severity
+        
         # Check for non-empty quoted strings - indicates hardcoded values
         # Empty strings (&quot;&quot;) are often just placeholders, ignore them
         import re
@@ -219,6 +229,39 @@ def is_variable_format(value: str) -> bool:
     
     # Plain text values are not safe
     return False
+
+def is_io_config_pattern(content: str) -> bool:
+    """
+    Check if the content represents an io_Config pattern.
+    Examples:
+    - io_Config(&quot;My_API_ClientCertificatePassword&quot;).ToString
+    - io_Config(&quote;My_API_ClientCertificatePassword&quot;).ToString (typo variant)
+    """
+    import re
+    
+    # Pattern to match io_Config access patterns
+    io_config_patterns = [
+        r'io_Config\s*\(\s*&quot;[^&]+&quot;\s*\)',    # io_Config(&quot;key&quot;)
+        r'io_Config\s*\(\s*"[^"]+"\s*\)',              # io_Config("key")
+        r'io_Config\s*\(\s*&quote;[^&]+&quot;\s*\)',   # io_Config(&quote;key&quot;) - typo variant
+    ]
+    
+    for pattern in io_config_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            return True
+    
+    return False
+
+def determine_io_config_severity_and_description(attr_value: str, attr_name: str) -> tuple:
+    """
+    Determine appropriate severity and description for io_Config patterns.
+    Returns (severity, description)
+    """
+    # Check for specific io_Config patterns
+    if 'io_Config' in attr_value or 'io_config' in attr_value:
+        return 'MEDIUM', f'{attr_name} retrieved from io_Config - Review configuration source security'
+    else:
+        return 'INFO', f'{attr_name} retrieved from configuration source - Review if source is secure'
 
 def find_line_number(content: str, search_text: str) -> int:
     """

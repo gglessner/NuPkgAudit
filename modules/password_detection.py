@@ -147,20 +147,34 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                 is_in_config = False
                 if 'in_config' in attr_value.lower() or 'inconfig' in attr_value.lower():
                     is_in_config = True
+                    
+                # Check if this is an in_AuthenticationData pattern
+                is_auth_data_pattern = is_authentication_data_pattern(attr_value)
+                
+                # Check if this is a Config_data pattern
+                is_config_data_pattern_detected = is_config_data_pattern(attr_value)
                 
                 if extracted_password:
                     description = f'Hard-coded Password detected (NetworkCredential)'
                     content_line = f'{matched_text.strip()} -> {extracted_password}'
+                    severity = 'HIGH'
                 elif resolved_value:
                     description = f'Hard-coded Password detected'
                     # Highlight the resolved value in yellow
                     highlighted_value = highlight_match(f'{matched_text.strip()} -> {resolved_value}', str(resolved_value))
                     content_line = highlighted_value
+                    severity = 'HIGH'
                 elif is_in_config:
                     description = f'Hard-coded Password detected'
                     highlighted_missing = highlight_match(f'{matched_text.strip()} -> Value not in Config.xlsx', 'Value not in Config.xlsx')
                     content_line = highlighted_missing
                     severity = 'FALSE-POSITIVE'
+                elif is_auth_data_pattern:
+                    severity, description = determine_authentication_data_severity_and_description(attr_value)
+                    content_line = matched_text.strip()
+                elif is_config_data_pattern_detected:
+                    severity, description = determine_config_data_severity_and_description(attr_value)
+                    content_line = matched_text.strip()
                 else:
                     description = f'Hard-coded Password detected'
                     content_line = matched_text.strip()
@@ -203,6 +217,14 @@ def is_variable_format(value: str) -> bool:
         if 'In_Config' in stripped_value:
             return False
         
+        # Check for in_AuthenticationData patterns (different handling)
+        if is_authentication_data_pattern(inner_content):
+            return False  # We want to flag these, but with different severity
+        
+        # Check for Config_data patterns (different handling)
+        if is_config_data_pattern(inner_content):
+            return False  # We want to flag these, but with different severity
+        
         # Check for non-empty quoted strings - indicates hardcoded values
         # Empty strings (&quot;&quot;) are often just placeholders, ignore them
         import re
@@ -226,6 +248,76 @@ def is_variable_format(value: str) -> bool:
     
     # Plain text values are not safe
     return False
+
+def is_authentication_data_pattern(content: str) -> bool:
+    """
+    Check if the content represents an in_AuthenticationData pattern.
+    Examples:
+    - in_AuthenticationData(&quot;mypassword&quot;).ToString
+    - in_Authentication(&quot;pwd&quot;).ToString
+    """
+    import re
+    
+    # Pattern to match in_AuthenticationData and similar authentication access patterns
+    auth_patterns = [
+        r'in_AuthenticationData\s*\(\s*&quot;[^&]+&quot;\s*\)',    # in_AuthenticationData(&quot;key&quot;)
+        r'in_AuthenticationData\s*\(\s*"[^"]+"\s*\)',              # in_AuthenticationData("key")
+        r'in_Authentication\s*\(\s*&quot;[^&]+&quot;\s*\)',        # in_Authentication(&quot;key&quot;)
+        r'in_Authentication\s*\(\s*"[^"]+"\s*\)',                  # in_Authentication("key")
+    ]
+    
+    for pattern in auth_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            return True
+    
+    return False
+
+def is_config_data_pattern(content: str) -> bool:
+    """
+    Check if the content represents a Config_data pattern.
+    Examples:
+    - Config_data(&quot;AccessCode&quot;).ToString
+    - config_data(&quot;secret_key&quot;).ToString
+    """
+    import re
+    
+    # Pattern to match Config_data and similar config access patterns
+    config_patterns = [
+        r'Config_data\s*\(\s*&quot;[^&]+&quot;\s*\)',    # Config_data(&quot;key&quot;)
+        r'Config_data\s*\(\s*"[^"]+"\s*\)',              # Config_data("key")
+        r'config_data\s*\(\s*&quot;[^&]+&quot;\s*\)',    # config_data(&quot;key&quot;) - lowercase variant
+        r'config_data\s*\(\s*"[^"]+"\s*\)',              # config_data("key") - lowercase variant
+    ]
+    
+    for pattern in config_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            return True
+    
+    return False
+
+def determine_authentication_data_severity_and_description(attr_value: str) -> tuple:
+    """
+    Determine appropriate severity and description for in_AuthenticationData patterns.
+    Returns (severity, description)
+    """
+    # Check for specific authentication data patterns
+    if 'in_AuthenticationData' in attr_value or 'in_authenticationdata' in attr_value:
+        return 'MEDIUM', 'Password retrieved from AuthenticationData - Review authentication source security'
+    elif 'in_Authentication' in attr_value or 'in_authentication' in attr_value:
+        return 'MEDIUM', 'Password retrieved from Authentication - Review authentication source security'
+    else:
+        return 'INFO', 'Password retrieved from authentication source - Review if source is secure'
+
+def determine_config_data_severity_and_description(attr_value: str) -> tuple:
+    """
+    Determine appropriate severity and description for Config_data patterns.
+    Returns (severity, description)
+    """
+    # Check for specific config data patterns
+    if 'Config_data' in attr_value or 'config_data' in attr_value:
+        return 'MEDIUM', 'Password retrieved from Config_data - Review configuration source security'
+    else:
+        return 'INFO', 'Password retrieved from configuration data source - Review if source is secure'
 
 def find_line_number(content: str, search_text: str) -> int:
     """
