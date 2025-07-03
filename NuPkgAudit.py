@@ -188,11 +188,20 @@ class UIPathSecurityAuditorV3:
                 root_package_name = dir_path.name
             
             package_results = self.scan_package(dir_path, print_info=print_info, root_package_name=root_package_name)
-            self.results['packages'][dir_path.name] = package_results
-            self.results['total_packages'] += 1
+            
+            # Use root_package_name as the key, not dir_path.name
+            if root_package_name not in self.results['packages']:
+                self.results['packages'][root_package_name] = package_results
+                self.results['total_packages'] += 1
+            else:
+                # Merge issues from subdirectories into the existing package
+                self.results['packages'][root_package_name]['issues'].extend(package_results['issues'])
+                self.results['packages'][root_package_name]['issue_count'] += package_results['issue_count']
             
             if package_results['issue_count'] > 0:
-                self.results['packages_with_issues'] += 1
+                # Only increment if this is a new package
+                if root_package_name not in [p['package_name'] for p in self.results['packages'].values() if p['issue_count'] > 0]:
+                    self.results['packages_with_issues'] += 1
                 self.results['total_issues'] += package_results['issue_count']
         
         return self.results
