@@ -172,22 +172,42 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
 def is_variable_format(value: str) -> bool:
     """
     Check if a value is in variable format [variable_name] or {x:Null}.
-    Note: In_Config patterns and .NET expressions are NOT considered safe - they should be reported.
+    Returns True if it's a safe variable reference, False if it contains hardcoded values.
     """
     stripped_value = value.strip()
-    # Only consider simple variable format [variable_name] as safe
+    
+    # {x:Null} is always safe
+    if stripped_value == '{x:Null}':
+        return True
+    
+    # Check if it's in square brackets
     if stripped_value.startswith('[') and stripped_value.endswith(']'):
-        # Check if it's an In_Config pattern - if so, it's NOT safe
+        inner_content = stripped_value[1:-1].strip()
+        
+        # In_Config patterns should always be resolved and checked
         if 'In_Config' in stripped_value:
             return False
-        # Check if it contains .NET method calls, constructors, or complex expressions - if so, it's NOT safe
-        if any(pattern in stripped_value for pattern in [
-            'NetworkCredential', 'DirectCast', 'SecureString', 'Convert.',
-            'System.', 'new ', 'New ', '(', ')', '.', '&quot;', '"'
-        ]):
+        
+        # Check if this contains hardcoded string literals (quoted values)
+        # Look for patterns like "hardcodedvalue" or &quot;hardcodedvalue&quot;
+        if '&quot;' in inner_content or '"' in inner_content:
+            # If it contains quoted strings, it's likely hardcoded
             return False
+        
+        # Check for .NET expressions that might contain variables (unquoted references)
+        if any(pattern in inner_content for pattern in [
+            'NetworkCredential', 'DirectCast', 'SecureString', 'Convert.',
+            'System.', 'new ', 'New ', '(', ')', '.'
+        ]):
+            # This is a .NET expression, but if it doesn't contain quoted strings,
+            # it's likely using variables and should be considered safe
+            return True
+        
+        # Simple variable reference like [variableName] - safe
         return True
-    return stripped_value == '{x:Null}'
+    
+    # Plain text values are not safe
+    return False
 
 def find_line_number(content: str, search_text: str) -> int:
     """
