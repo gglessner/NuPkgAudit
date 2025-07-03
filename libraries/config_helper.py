@@ -52,19 +52,25 @@ def parse_in_config_pattern(value: str) -> Optional[Tuple[str, str]]:
 
 def find_config_xlsx(package_path: Path) -> Optional[Path]:
     """
-    Find Config.xlsx file in the package directory or its subdirectories.
-    
+    Find Config.xlsx file by walking up from the given path to the root.
+    If package_path is a file, start from its parent directory.
+    Looks for Config.xlsx in the current directory and each parent up to the filesystem root.
     Args:
-        package_path: Path to the package directory
-        
+        package_path: Path to the package directory or a subdirectory/file within it
     Returns:
         Path to Config.xlsx if found, None otherwise
     """
-    # Look for Config.xlsx in the package directory and subdirectories
-    for file_path in package_path.rglob('Config.xlsx'):
-        if file_path.is_file():
-            return file_path
-    
+    p = package_path
+    if p.is_file():
+        p = p.parent
+    p = p.resolve()
+    while True:
+        candidate = p / 'Config.xlsx'
+        if candidate.is_file():
+            return candidate
+        if p.parent == p:
+            break  # Reached filesystem root
+        p = p.parent
     return None
 
 def get_config_value(config_file_path: Path, config_key: str) -> Optional[str]:
