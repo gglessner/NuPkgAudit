@@ -35,12 +35,11 @@ from highlight_helper import highlight_match
 
 logger = logging.getLogger(__name__)
 
-# Regex pattern to match Password attributes
-# This will match even if the attribute is split across lines
-# Uses word boundaries to avoid matching ClientCertificatePassword
-# Also matches in_Password and out_Password
+# Regex pattern to match specific Password attributes
+# Matches only: Password=, in_Password=, out_Password=
+# Uses word boundaries to avoid matching other attributes like isPassword, hasPassword, etc.
 PASSWORD_ATTR_PATTERN = re.compile(
-    r'([\w:]*Password)\s*=\s*"([^"]+)"',
+    r'\b((?:in_|out_)?Password)\s*=\s*"([^"]+)"',
     re.IGNORECASE | re.MULTILINE
 )
 
