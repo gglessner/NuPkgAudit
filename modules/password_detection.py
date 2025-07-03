@@ -46,7 +46,7 @@ PASSWORD_ATTR_PATTERN = re.compile(
 
 # Regex to match NetworkCredential pattern inside brackets
 NETWORK_CREDENTIAL_PATTERN = re.compile(
-    r'\[New System\.Net\.NetworkCredential\(string\.Empty, (?:&quot;|\")([^"&]+)(?:&quot;|\")\)\.SecurePassword\]',
+    r'\[\s*(?:new|New)\s+System\.[Nn][Ee][Tt]\.NetworkCredential\(\s*(?:string\.Empty|&quot;&quot;)\s*,\s*&quot;([^&]+)&quot;\s*\)\.SecurePassword\s*\]',
     re.IGNORECASE
 )
 
@@ -125,7 +125,7 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
             # Use the improved helper to resolve any in_config inside brackets
             resolved_value = resolve_in_config_value(attr_value, root_package)
             # Check for NetworkCredential pattern
-            network_cred_match = NETWORK_CREDENTIAL_PATTERN.match(attr_value.strip())
+            network_cred_match = NETWORK_CREDENTIAL_PATTERN.search(attr_value.strip())
             if network_cred_match:
                 extracted_password = network_cred_match.group(1)
             else:
