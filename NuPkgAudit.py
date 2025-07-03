@@ -194,9 +194,25 @@ class UIPathSecurityAuditorV3:
                 self.results['packages'][root_package_name] = package_results
                 self.results['total_packages'] += 1
             else:
-                # Merge issues from subdirectories into the existing package
-                self.results['packages'][root_package_name]['issues'].extend(package_results['issues'])
-                self.results['packages'][root_package_name]['issue_count'] += package_results['issue_count']
+                # Merge issues from subdirectories into the existing package, avoiding duplicates
+                existing_issues = self.results['packages'][root_package_name]['issues']
+                existing_keys = set()
+                
+                # Create unique keys for existing issues
+                for issue in existing_issues:
+                    key = (issue.get('file', ''), issue.get('line', 0), issue.get('module', ''), issue.get('description', ''))
+                    existing_keys.add(key)
+                
+                # Only add new issues that don't already exist
+                new_issues = []
+                for issue in package_results['issues']:
+                    key = (issue.get('file', ''), issue.get('line', 0), issue.get('module', ''), issue.get('description', ''))
+                    if key not in existing_keys:
+                        new_issues.append(issue)
+                        existing_keys.add(key)
+                
+                self.results['packages'][root_package_name]['issues'].extend(new_issues)
+                self.results['packages'][root_package_name]['issue_count'] = len(self.results['packages'][root_package_name]['issues'])
             
             if package_results['issue_count'] > 0:
                 # Only increment if this is a new package
