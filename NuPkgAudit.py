@@ -89,14 +89,17 @@ class UIPathSecurityAuditorV3:
         logger.info(f"Loaded {len(modules)} modules in alphabetical order")
         return modules
     
-    def scan_package(self, package_path: Path, print_info: bool = True) -> Dict[str, Any]:
+    def scan_package(self, package_path: Path, print_info: bool = True, root_package_name: str = None) -> Dict[str, Any]:
         """Scan a single UIPath package using all loaded modules."""
         package_name = package_path.name
         if print_info:
             logger.info(f"Scanning package: {package_name}")
         
+        # Use root package name if provided, otherwise use current package name
+        display_package_name = root_package_name if root_package_name else package_name
+        
         package_results = {
-            'package_name': package_name,
+            'package_name': display_package_name,
             'package_path': str(package_path),
             'issues': [],
             'file_count': 0,
@@ -115,8 +118,8 @@ class UIPathSecurityAuditorV3:
                 try:
                     logger.debug(f"Executing module {module.__name__} on package {package_name}")
                     
-                    # Call the module's scan_package function
-                    module_issues = module.scan_package(str(package_path))
+                    # Call the module's scan_package function with root package name
+                    module_issues = module.scan_package(str(package_path), root_package_name=root_package_name)
                     
                     if module_issues:
                         package_results['issues'].extend(module_issues)
@@ -169,7 +172,19 @@ class UIPathSecurityAuditorV3:
         for dir_path in all_directories:
             # Only print INFO for top-level subdirectories
             print_info = dir_path in top_level_directories
-            package_results = self.scan_package(dir_path, print_info=print_info)
+            
+            # Determine the root package name (the top-level directory name)
+            root_package_name = None
+            if dir_path in top_level_directories:
+                root_package_name = dir_path.name
+            else:
+                # Find the top-level directory that contains this subdirectory
+                for top_dir in top_level_directories:
+                    if dir_path.is_relative_to(top_dir):
+                        root_package_name = top_dir.name
+                        break
+            
+            package_results = self.scan_package(dir_path, print_info=print_info, root_package_name=root_package_name)
             self.results['packages'][dir_path.name] = package_results
             self.results['total_packages'] += 1
             
@@ -202,7 +217,11 @@ class UIPathSecurityAuditorV3:
         report_lines.append(f"Total Packages Scanned: {filtered_results['total_packages']}")
         report_lines.append(f"Packages with Issues: {filtered_results['packages_with_issues']}")
         report_lines.append(f"Total Issues Found: {filtered_results['total_issues']}")
-        report_lines.append(f"Modules Loaded: {len(self.modules)}")
+        # Print each module's name and description
+        report_lines.append("Modules Loaded:")
+        for module in self.modules:
+            desc = getattr(module, 'MODULE_DESCRIPTION', '(No description provided)')
+            report_lines.append(f"  - {module.__name__}: {desc}")
         if severity_filter:
             report_lines.append(f"Filtered by Severity: {', '.join(sorted(severity_filter))}")
         report_lines.append("")
@@ -227,9 +246,7 @@ class UIPathSecurityAuditorV3:
         for package_name, package in filtered_results['packages'].items():
             if package['issue_count'] > 0:
                 report_lines.append(f"Package: {package_name}")
-                report_lines.append(f"Files Scanned: {package['file_count']}")
                 report_lines.append(f"Issues Found: {package['issue_count']}")
-                report_lines.append(f"Modules Executed: {', '.join(package['modules_executed'])}")
                 
                 for issue in package['issues']:
                     report_lines.append(f"  [{issue['severity']}] {issue['description']}")

@@ -35,12 +35,15 @@ PASSWORD_ATTR_PATTERN = re.compile(
     re.IGNORECASE | re.MULTILINE
 )
 
-def scan_package(package_path: str) -> List[Dict[str, Any]]:
+MODULE_DESCRIPTION = "Detects hardcoded ClientCertificatePassword and SecureClientCertificatePassword attributes in .xaml files. Flags as HIGH risk if not a variable or {x:Null}."
+
+def scan_package(package_path: str, root_package_name: str = None) -> List[Dict[str, Any]]:
     """
     Scan a UIPath package for hardcoded client certificate passwords.
     
     Args:
         package_path: Path to the package directory
+        root_package_name: Name of the root package directory
         
     Returns:
         List of issues found
@@ -52,7 +55,7 @@ def scan_package(package_path: str) -> List[Dict[str, Any]]:
         # Scan all .xaml files recursively in the package
         for file_path in package.rglob('*.xaml'):
             if file_path.is_file():
-                file_issues = scan_xaml_file(file_path, package)
+                file_issues = scan_xaml_file(file_path, package, root_package_name)
                 if file_issues:
                     issues.extend(file_issues)
     except Exception as e:
@@ -69,13 +72,14 @@ def scan_package(package_path: str) -> List[Dict[str, Any]]:
     
     return issues
 
-def scan_xaml_file(file_path: Path, root_package: Path) -> List[Dict[str, Any]]:
+def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str = None) -> List[Dict[str, Any]]:
     """
     Scan a single .xaml file for hardcoded client certificate passwords.
     
     Args:
         file_path: Path to the .xaml file to scan
         root_package: Root package directory for reporting
+        root_package_name: Name of the root package directory
         
     Returns:
         List of issues found in the file
@@ -91,6 +95,8 @@ def scan_xaml_file(file_path: Path, root_package: Path) -> List[Dict[str, Any]]:
             # Only report if not in [variable] format
             if not is_variable_format(attr_value):
                 line_num = find_line_number(content, match.group(0))
+                # Use root package name if provided, otherwise use current package name
+                package_name = root_package_name if root_package_name else root_package.name
                 issues.append({
                     'type': 'client_certificate_password',
                     'severity': 'HIGH',
@@ -98,7 +104,7 @@ def scan_xaml_file(file_path: Path, root_package: Path) -> List[Dict[str, Any]]:
                     'file': str(file_path),
                     'line': line_num,
                     'line_content': match.group(0).strip(),
-                    'package_name': root_package.name,
+                    'package_name': package_name,
                     'module': 'client_certificate_password'
                 })
     except Exception as e:
