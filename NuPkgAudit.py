@@ -89,10 +89,11 @@ class UIPathSecurityAuditorV3:
         logger.info(f"Loaded {len(modules)} modules in alphabetical order")
         return modules
     
-    def scan_package(self, package_path: Path) -> Dict[str, Any]:
+    def scan_package(self, package_path: Path, print_info: bool = True) -> Dict[str, Any]:
         """Scan a single UIPath package using all loaded modules."""
         package_name = package_path.name
-        logger.info(f"Scanning package: {package_name}")
+        if print_info:
+            logger.info(f"Scanning package: {package_name}")
         
         package_results = {
             'package_name': package_name,
@@ -153,21 +154,24 @@ class UIPathSecurityAuditorV3:
         if not self.scan_directory.exists():
             raise FileNotFoundError(f"Directory not found: {self.scan_directory}")
         
-        # Get all subdirectories (including nested) and sort them alphabetically
-        all_directories = []
-        for root, dirs, files in os.walk(self.scan_directory):
-            for dir_name in dirs:
-                dir_path = Path(root) / dir_name
-                all_directories.append(dir_path)
+        # Get only top-level subdirectories and sort them alphabetically
+        top_level_directories = []
+        try:
+            for item in self.scan_directory.iterdir():
+                if item.is_dir():
+                    top_level_directories.append(item)
+        except PermissionError:
+            logger.warning(f"Permission denied accessing directory: {self.scan_directory}")
+            return self.results
         
         # Sort directories alphabetically
-        all_directories.sort()
+        top_level_directories.sort()
         
-        logger.info(f"Found {len(all_directories)} directories to scan in alphabetical order")
+        logger.info(f"Found {len(top_level_directories)} top-level directories to scan in alphabetical order")
         logger.info(f"Using {len(self.modules)} modules")
         
-        for dir_path in all_directories:
-            package_results = self.scan_package(dir_path)
+        for dir_path in top_level_directories:
+            package_results = self.scan_package(dir_path, print_info=True)
             self.results['packages'][dir_path.name] = package_results
             self.results['total_packages'] += 1
             
