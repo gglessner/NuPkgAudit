@@ -181,7 +181,7 @@ def scan_sql_injection_vulnerabilities(file_path, content, root_package=None):
     # SQL-related attributes to check
     sql_attributes = [
         'Query', 'CommandText', 'ConnectionString', 'SqlQuery', 'Statement',
-        'Command', 'QueryString', 'DatabaseQuery', 'SqlStatement', 'Text',
+        'Command', 'QueryString', 'DatabaseQuery', 'SqlStatement',
         'Value', 'Expression', 'Arguments', 'Parameters'
     ]
     
