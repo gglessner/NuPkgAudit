@@ -1,10 +1,29 @@
+#!/usr/bin/env python3
+"""
+SQL Injection Detection Module
+Scans for SQL injection vulnerabilities in UIPath automation.
+
+Author: Garland Glessner <gglessner@gmail.com>
+License: GNU General Public License v3.0
+Copyright (C) 2024 Garland Glessner
+"""
+
 import re
 import logging
-from libraries.config_helper import resolve_config_value
-from libraries.highlight_helper import highlight_match
+import sys
+from pathlib import Path
+from typing import List, Dict, Any
+
+# Add the libraries directory to the path
+sys.path.append(str(Path(__file__).parent.parent / 'libraries'))
+
+from config_helper import resolve_in_config_value
+from highlight_helper import highlight_match
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+MODULE_DESCRIPTION = "Detects SQL injection vulnerabilities in database queries, connection strings, and stored procedure calls. Flags string concatenation, unparameterized queries, and dynamic SQL construction."
 
 def is_string_concatenation_sql_pattern(stripped_value):
     """
@@ -153,7 +172,7 @@ def determine_sql_injection_severity_and_description(attr_value):
     
     return 'LOW', 'Potential SQL injection risk - Review query construction'
 
-def scan_sql_injection_vulnerabilities(file_path, content):
+def scan_sql_injection_vulnerabilities(file_path, content, root_package=None):
     """
     Scan for SQL injection vulnerabilities in UIPath XAML files
     """
@@ -203,8 +222,8 @@ def scan_sql_injection_vulnerabilities(file_path, content):
                     if not has_sql_keyword:
                         continue
                     
-                    # Resolve config values if present
-                    resolved_value = resolve_config_value(attr_value, file_path)
+                    # Resolve config values if present  
+                    resolved_value = resolve_in_config_value(attr_value, root_package) if root_package else None
                     
                     # Check various SQL injection patterns
                     is_vulnerable = (
@@ -240,4 +259,123 @@ def scan_sql_injection_vulnerabilities(file_path, content):
                             'module': 'sql_injection_detection'
                         })
     
-    return results 
+    return results
+
+def scan_package(package_path: str, root_package_name: str = None, scanned_files: set = None) -> List[Dict[str, Any]]:
+    """
+    Scan a UIPath package for SQL injection vulnerabilities.
+    
+    Args:
+        package_path: Path to the package directory
+        root_package_name: Name of the root package directory
+        scanned_files: Set of files that have already been scanned
+        
+    Returns:
+        List of issues found
+    """
+    issues = []
+    package = Path(package_path)
+    
+    # Initialize scanned_files if not provided
+    if scanned_files is None:
+        scanned_files = set()
+    
+    try:
+        # Scan all .xaml files recursively in the package
+        for file_path in package.rglob('*.xaml'):
+            if file_path.is_file():
+                # Skip if file has already been scanned
+                if str(file_path) in scanned_files:
+                    continue
+                
+                # Add file to scanned set
+                scanned_files.add(str(file_path))
+                
+                file_issues = scan_xaml_file(file_path, package, root_package_name)
+                if file_issues:
+                    issues.extend(file_issues)
+    except Exception as e:
+        logger.error(f"Error scanning package {package_path}: {str(e)}")
+        issues.append({
+            'type': 'sql_injection_detection',
+            'severity': 'ERROR',
+            'description': f'Error scanning package: {str(e)}',
+            'file': str(package_path),
+            'line': 0,
+            'line_content': '',
+            'module': 'sql_injection_detection'
+        })
+    
+    return issues
+
+def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str = None) -> List[Dict[str, Any]]:
+    """
+    Scan a single .xaml file for SQL injection vulnerabilities.
+    
+    Args:
+        file_path: Path to the .xaml file to scan
+        root_package: Root package directory for reporting
+        root_package_name: Name of the root package directory
+        
+    Returns:
+        List of issues found in the file
+    """
+    issues = []
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+        
+        # Use the existing scan_sql_injection_vulnerabilities function
+        vulnerabilities = scan_sql_injection_vulnerabilities(file_path, content, root_package)
+        
+        # Convert to the expected format
+        lines = content.split('\n')
+        package_name = root_package_name if root_package_name else root_package.name
+        
+        for vuln in vulnerabilities:
+            line_num = vuln['line']
+            full_line = lines[line_num - 1] if line_num > 0 and line_num <= len(lines) else ""
+            
+            issues.append({
+                'type': 'sql_injection_detection',
+                'severity': vuln['severity'],
+                'description': vuln['description'],
+                'file': str(file_path),
+                'line': line_num,
+                'line_content': vuln['content'],
+                'full_line': full_line,
+                'matched_text': vuln['content'],
+                'package_name': package_name,
+                'module': 'sql_injection_detection'
+            })
+            
+    except Exception as e:
+        logger.error(f"Error scanning file {file_path}: {str(e)}")
+        issues.append({
+            'type': 'sql_injection_detection',
+            'severity': 'ERROR',
+            'description': f'Error scanning file: {str(e)}',
+            'file': str(file_path),
+            'line': 0,
+            'line_content': '',
+            'module': 'sql_injection_detection'
+        })
+    
+    return issues
+
+def find_line_number(content: str, search_text: str) -> int:
+    """
+    Find the line number of a specific text in content.
+    
+    Args:
+        content: The text content to search in
+        search_text: The text to search for
+        
+    Returns:
+        Line number (1-based) where the text is found, or 0 if not found
+    """
+    lines = content.split('\n')
+    for i, line in enumerate(lines, 1):
+        if search_text in line:
+            return i
+    return 0 
