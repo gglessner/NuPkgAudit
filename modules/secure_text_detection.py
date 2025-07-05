@@ -122,16 +122,16 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
             if resolved_value:
                 check_value = resolved_value
                 original_value = attr_value
-                logger.info(f"Resolved in_config '{attr_value}' to value from {resolve_in_config_value.__module__}")
+                logger.debug(f"Resolved in_config '{attr_value}' to value from {resolve_in_config_value.__module__}")
             else:
                 check_value = attr_value
                 original_value = attr_value
-                logger.info(f"Extracted secure text attribute value: {attr_value}")
+                logger.debug(f"Extracted secure text attribute value: {attr_value}")
             
             # Check for NetworkCredential patterns with hardcoded values
             extracted_password = None
             if 'NetworkCredential' in attr_value:
-                logger.info(f"NetworkCredential attribute value: {attr_value}")
+                logger.debug(f"NetworkCredential attribute value: {attr_value}")
                 
                 # Look for password parameter in NetworkCredential constructor
                 network_cred_patterns = [

@@ -120,6 +120,11 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
             attr_value = match.group(2)
             matched_text = match.group(0)
             
+            # Debug logging for extracted attribute values
+            if 'NetworkCredential' in attr_value:
+                logger.debug(f"NetworkCredential attribute value: {attr_value}")
+            logger.debug(f"Extracted password attribute value: {attr_value}")
+            
             # Use the improved helper to resolve any in_config inside brackets
             resolved_value = resolve_in_config_value(attr_value, root_package)
             # Check for NetworkCredential pattern
@@ -197,9 +202,6 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
                     'package_name': package_name,
                     'module': 'password_detection'
                 })
-                if 'NetworkCredential' in attr_value:
-                    logger.info(f"NetworkCredential attribute value: {attr_value}")
-                logger.info(f"Extracted password attribute value: {attr_value}")
     except Exception as e:
         logger.warning(f"Error reading file {file_path}: {str(e)}")
     return issues

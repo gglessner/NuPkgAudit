@@ -8,25 +8,26 @@ NuPkgAudit is a sophisticated security auditing tool designed specifically for U
 
 ## Key Features
 
-- **🔧 Modular Architecture**: Extensible framework with 9 specialized security modules + beta modules
-- **🔍 Comprehensive Scanning**: Scans multiple file types (.xaml, .vb, .cs, .txt, .json, .xml, .config, .ini, .xlsx)
-- **🛡️ Advanced Security Detection**: Identifies hardcoded credentials, network vulnerabilities, SQL injection, and more
-- **⚡ Real-Time Feedback**: `--inline` mode shows issues immediately as packages are scanned
-- **🎨 Color-Coded Output**: RED for HIGH severity, YELLOW for MEDIUM, CYAN for LOW, with timestamps
-- **⚙️ Sophisticated Pattern Detection**: Detects complex dynamic retrieval patterns including:
+- **Modular Architecture**: Extensible framework with 7 specialized security modules + beta modules
+- **Comprehensive Scanning**: Scans multiple file types (.xaml, .vb, .cs, .txt, .json, .xml, .config, .ini, .xlsx)
+- **Advanced Security Detection**: Identifies hardcoded credentials, network vulnerabilities, SQL injection, and more
+- **Real-Time Feedback**: `--inline` mode shows issues immediately as packages are scanned
+- **Color-Coded Output**: RED for HIGH severity, YELLOW for MEDIUM, CYAN for LOW, with timestamps
+- **Sophisticated Pattern Detection**: Detects complex dynamic retrieval patterns including:
   - `in_AuthenticationData` patterns
   - `Config_data` patterns  
   - `DirectCast` and `TryCast` configurations
   - `NetworkCredential` patterns
   - `io_Config` and `io_Credentials` patterns
   - Case-insensitive `in_config` patterns in any context
-- **📊 Config.xlsx Resolution**: Automatically resolves configuration values from package Config.xlsx files
-- **🎯 Intelligent Classification**: Distinguishes between hardcoded values (HIGH) and dynamic patterns (MEDIUM/FALSE-POSITIVE)
-- **🔆 Enhanced Highlighting**: Yellow highlighting with "→" format for resolved values and missing config keys
-- **📈 Flexible Severity Levels**: HIGH, MEDIUM, LOW, INFO, ERROR, FALSE-POSITIVE classifications
-- **📄 Multiple Output Formats**: Text reports, JSON, and Excel export capabilities
-- **🔇 Configurable Logging**: `--warn` flag to control warning visibility, timestamps for package scanning
-- **🧪 Beta Module Support**: Separate `modules-beta/` directory for experimental or high-false-positive modules
+- **Config.xlsx Resolution**: Automatically resolves configuration values from package Config.xlsx files
+- **Intelligent Classification**: Distinguishes between hardcoded values (HIGH) and dynamic patterns (MEDIUM/FALSE-POSITIVE)
+- **Enhanced Highlighting**: Yellow highlighting with "→" format for resolved values and missing config keys
+- **Flexible Severity Levels**: HIGH, MEDIUM, LOW, INFO, ERROR, FALSE-POSITIVE classifications
+- **Multiple Output Formats**: Text reports, JSON, and Excel export capabilities
+- **Configurable Logging**: `--warn` flag to control warning visibility, timestamps for package scanning
+- **Clean Output**: DEBUG-level logging for verbose attribute extraction details
+- **Beta Module Support**: Separate `modules-beta/` directory for experimental or high-false-positive modules
 
 ## Installation
 
@@ -83,7 +84,7 @@ python NuPkgAudit.py packages --sev-medium --sev-low
 # Multiple severity filters with real-time feedback
 python NuPkgAudit.py packages --sev-high --sev-medium --inline --output critical_issues.txt
 
-# Verbose output with detailed logging
+# Verbose output with detailed logging (shows DEBUG messages)
 python NuPkgAudit.py packages --verbose
 
 # Use beta modules (experimental)
@@ -98,7 +99,7 @@ python NuPkgAudit.py packages --modules modules-beta
 | `--modules, -m` | Directory containing scan modules (default: modules) |
 | `--output, -o` | Output file for text report |
 | `--json, -j` | Output file for JSON results |
-| `--verbose, -v` | Enable verbose output with detailed logging |
+| `--verbose, -v` | Enable verbose output with detailed logging (shows DEBUG messages) |
 | `--warn, -w` | Show warning messages (hidden by default) |
 | `--inline, -i` | Show issues immediately as each package is scanned (real-time feedback) |
 | `--sev-high` | Include HIGH severity findings |
@@ -142,25 +143,7 @@ python NuPkgAudit.py packages --modules modules-beta
 #### 5. Client Certificate Password Detection Module (`client_certificate_password.py`)
 **Scans for ClientCertificatePassword and SecureClientCertificatePassword attributes.**
 
-#### 6. SQL Injection Detection Module (`sql_injection_detection.py`)
-**Detects SQL injection vulnerabilities in database queries and connection strings.**
-
-**Features:**
-- String concatenation in SQL queries → **HIGH**
-- Unparameterized queries → **HIGH**
-- Dynamic SQL construction → **MEDIUM**
-- Stored procedure calls → **LOW**
-
-#### 7. File Path Traversal Detection Module (`file_path_traversal_detection.py`)
-**Detects file path traversal vulnerabilities and unsafe file operations.**
-
-**Features:**
-- Directory traversal patterns (`../`, `..\\`) → **HIGH**
-- Absolute path injection → **MEDIUM**
-- Environment variable abuse → **MEDIUM**
-- Unsafe file operations → **LOW**
-
-#### 8. Hardcoded Secrets Detection Module (`hardcoded_secrets_detection.py`)
+#### 6. Hardcoded Secrets Detection Module (`hardcoded_secrets_detection.py`)
 **Detects hardcoded secrets including API keys, private keys, and connection strings.**
 
 **Features:**
@@ -169,7 +152,7 @@ python NuPkgAudit.py packages --modules modules-beta
 - Database connection strings → **HIGH**
 - JWT tokens → **MEDIUM**
 
-#### 9. Insecure Network Detection Module (`insecure_network_detection.py`)
+#### 7. Insecure Network Detection Module (`insecure_network_detection.py`)
 **Detects insecure network configurations and HTTP usage for sensitive data.**
 
 **Features:**
@@ -180,7 +163,27 @@ python NuPkgAudit.py packages --modules modules-beta
 
 ### Beta Modules (`modules-beta/`)
 
-#### 1. XLSX Secrets Detection Module (`xlsx_secrets_detection.py`)
+#### 1. SQL Injection Detection Module (`sql_injection_detection.py`)
+**Detects SQL injection vulnerabilities in database queries and connection strings.**
+
+**Features:**
+- String concatenation in SQL queries → **HIGH**
+- Unparameterized queries → **HIGH**
+- Dynamic SQL construction → **MEDIUM**
+- Stored procedure calls → **LOW**
+- Moved to beta due to potential false positives
+
+#### 2. File Path Traversal Detection Module (`file_path_traversal_detection.py`)
+**Detects file path traversal vulnerabilities and unsafe file operations.**
+
+**Features:**
+- Directory traversal patterns (`../`, `..\\`) → **HIGH**
+- Absolute path injection → **MEDIUM**
+- Environment variable abuse → **MEDIUM**
+- Unsafe file operations → **LOW**
+- Moved to beta due to potential false positives
+
+#### 3. XLSX Secrets Detection Module (`xlsx_secrets_detection.py`)
 **Scans Excel files for sensitive data in configuration sheets.**
 
 **Features:**
@@ -188,7 +191,7 @@ python NuPkgAudit.py packages --modules modules-beta
 - Detects passwords, API keys, tokens in spreadsheets
 - May have false positives with common terms
 
-#### 2. Command Injection Detection Module (`command_injection_detection.py`)
+#### 4. Command Injection Detection Module (`command_injection_detection.py`)
 **Detects command injection vulnerabilities in system calls.**
 
 **Features:**
@@ -215,7 +218,7 @@ python NuPkgAudit.py packages --inline --sev-high
 **Example Output:**
 ```
 >>> INLINE MODE ENABLED - Real-time feedback
->>> Scanning 9 packages with 9 modules
+>>> Scanning 9 packages with 7 modules
 >>> Showing severities: HIGH, MEDIUM
 ================================================================================
 
@@ -295,6 +298,7 @@ The tool provides flexible logging control:
 **Default Behavior:**
 - Shows timestamped package scanning progress
 - Hides warning messages for cleaner output
+- Hides verbose attribute extraction details (DEBUG level)
 - Shows errors and critical information
 
 **With `--warn` flag:**
@@ -304,6 +308,7 @@ The tool provides flexible logging control:
 **With `--verbose` flag:**
 - Shows all logging levels including debug information
 - Detailed module execution information
+- Verbose attribute extraction details
 
 ## Output Formats
 
@@ -337,16 +342,16 @@ NuPkgAudit3/
 ├── NuPkgAudit.py                      # Main auditor script
 ├── modules/                           # Active security modules
 │   ├── client_certificate_password.py # Certificate password detection
-│   ├── file_path_traversal_detection.py # Path traversal vulnerabilities
 │   ├── hardcoded_secrets_detection.py # API keys, tokens, secrets
 │   ├── insecure_network_detection.py  # HTTP usage, cert bypasses
 │   ├── password_detection.py          # Password pattern detection
 │   ├── secure_text_detection.py       # SecureText pattern detection
-│   ├── sql_injection_detection.py     # SQL injection vulnerabilities
 │   ├── token_detection.py             # Token pattern detection
 │   └── username_detection.py          # Username pattern detection
 ├── modules-beta/                      # Beta/experimental modules
 │   ├── command_injection_detection.py # Command injection (high FP rate)
+│   ├── file_path_traversal_detection.py # Path traversal (potential FPs)
+│   ├── sql_injection_detection.py     # SQL injection (potential FPs)
 │   └── xlsx_secrets_detection.py      # Excel file scanning (slow)
 ├── libraries/                         # Helper libraries
 │   ├── config_helper.py               # Config.xlsx resolution utilities
@@ -433,19 +438,19 @@ python NuPkgAudit.py packages --sev-fp --output full_audit.txt
 # 4. Development workflow - all findings with verbose logging
 python NuPkgAudit.py packages --sev-high --sev-medium --sev-fp --verbose --warn
 
-# 5. Test beta modules
+# 5. Test beta modules (includes SQL injection, file path traversal detection)
 python NuPkgAudit.py packages --modules modules-beta --sev-high
 ```
 
 ### Typical Output Summary
 ```
 Issues by Severity:
-  HIGH: 21        # Hardcoded credentials, SQL injection, path traversal
+  HIGH: 21        # Hardcoded credentials, network issues, secrets
   MEDIUM: 47      # Dynamic patterns, weak configurations
   LOW: 8          # Best practice violations
   FALSE-POSITIVE: 11  # Unresolved config references, legitimate schemas
   
-Modules loaded: 9 (client_certificate_password, file_path_traversal_detection, hardcoded_secrets_detection, insecure_network_detection, password_detection, secure_text_detection, sql_injection_detection, token_detection, username_detection)
+Modules loaded: 7 (client_certificate_password, hardcoded_secrets_detection, insecure_network_detection, password_detection, secure_text_detection, token_detection, username_detection)
 ```
 
 ## Security Considerations
@@ -464,6 +469,7 @@ Modules loaded: 9 (client_certificate_password, file_path_traversal_detection, h
 - **Large Package Support**: Handles enterprise-scale UIPath automation projects
 - **Incremental Scanning**: Tracks scanned files to avoid duplicate processing in nested packages
 - **Real-time Feedback**: Inline mode provides immediate results without waiting for completion
+- **Clean Output**: Verbose logging controlled by flags for better performance
 
 ## Troubleshooting
 
@@ -488,6 +494,11 @@ pip install -r requirements.txt
 - Move problematic modules to `modules-beta/`
 - Use severity filters to focus on critical issues
 - Review FALSE-POSITIVE findings for legitimate patterns
+
+**Verbose Output:**
+- Use `--verbose` flag only when debugging
+- Default mode hides DEBUG-level attribute extraction details
+- Use `--warn` flag to see configuration warnings
 
 ## Contributing
 
