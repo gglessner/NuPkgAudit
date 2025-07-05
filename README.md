@@ -8,7 +8,7 @@ NuPkgAudit is a sophisticated security auditing tool designed specifically for U
 
 ## Key Features
 
-- **Modular Architecture**: Extensible framework with 7 specialized security modules + beta modules
+- **Modular Architecture**: Extensible framework with specialized security modules + beta modules
 - **Comprehensive Scanning**: Scans multiple file types (.xaml, .vb, .cs, .txt, .json, .xml, .config, .ini, .xlsx)
 - **Advanced Security Detection**: Identifies hardcoded credentials, network vulnerabilities, SQL injection, and more
 - **Real-Time Feedback**: `--inline` mode shows issues immediately as packages are scanned
@@ -152,15 +152,6 @@ python NuPkgAudit.py packages --modules modules-beta
 - Database connection strings → **HIGH**
 - JWT tokens → **MEDIUM**
 
-#### 7. Insecure Network Detection Module (`insecure_network_detection.py`)
-**Detects insecure network configurations and HTTP usage for sensitive data.**
-
-**Features:**
-- HTTP usage for sensitive data → **HIGH**
-- Certificate validation bypasses → **HIGH**
-- Weak TLS settings → **MEDIUM**
-- Legitimate schema usage → **FALSE-POSITIVE**
-
 ### Beta Modules (`modules-beta/`)
 
 #### 1. SQL Injection Detection Module (`sql_injection_detection.py`)
@@ -183,7 +174,17 @@ python NuPkgAudit.py packages --modules modules-beta
 - Unsafe file operations → **LOW**
 - Moved to beta due to potential false positives
 
-#### 3. XLSX Secrets Detection Module (`xlsx_secrets_detection.py`)
+#### 3. Insecure Network Detection Module (`insecure_network_detection.py`)
+**Detects insecure network configurations and HTTP usage for sensitive data.**
+
+**Features:**
+- HTTP usage for sensitive data → **HIGH**
+- Certificate validation bypasses → **HIGH**
+- Weak TLS settings → **MEDIUM**
+- Legitimate schema usage → **FALSE-POSITIVE**
+- Moved to beta due to potential false positives
+
+#### 4. XLSX Secrets Detection Module (`xlsx_secrets_detection.py`)
 **Scans Excel files for sensitive data in configuration sheets.**
 
 **Features:**
@@ -191,7 +192,7 @@ python NuPkgAudit.py packages --modules modules-beta
 - Detects passwords, API keys, tokens in spreadsheets
 - May have false positives with common terms
 
-#### 4. Command Injection Detection Module (`command_injection_detection.py`)
+#### 5. Command Injection Detection Module (`command_injection_detection.py`)
 **Detects command injection vulnerabilities in system calls.**
 
 **Features:**
@@ -218,7 +219,7 @@ python NuPkgAudit.py packages --inline --sev-high
 **Example Output:**
 ```
 >>> INLINE MODE ENABLED - Real-time feedback
->>> Scanning 9 packages with 7 modules
+>>> Scanning packages with active modules
 >>> Showing severities: HIGH, MEDIUM
 ================================================================================
 
@@ -343,7 +344,6 @@ NuPkgAudit3/
 ├── modules/                           # Active security modules
 │   ├── client_certificate_password.py # Certificate password detection
 │   ├── hardcoded_secrets_detection.py # API keys, tokens, secrets
-│   ├── insecure_network_detection.py  # HTTP usage, cert bypasses
 │   ├── password_detection.py          # Password pattern detection
 │   ├── secure_text_detection.py       # SecureText pattern detection
 │   ├── token_detection.py             # Token pattern detection
@@ -351,6 +351,7 @@ NuPkgAudit3/
 ├── modules-beta/                      # Beta/experimental modules
 │   ├── command_injection_detection.py # Command injection (high FP rate)
 │   ├── file_path_traversal_detection.py # Path traversal (potential FPs)
+│   ├── insecure_network_detection.py  # Network security (potential FPs)
 │   ├── sql_injection_detection.py     # SQL injection (potential FPs)
 │   └── xlsx_secrets_detection.py      # Excel file scanning (slow)
 ├── libraries/                         # Helper libraries
@@ -438,19 +439,19 @@ python NuPkgAudit.py packages --sev-fp --output full_audit.txt
 # 4. Development workflow - all findings with verbose logging
 python NuPkgAudit.py packages --sev-high --sev-medium --sev-fp --verbose --warn
 
-# 5. Test beta modules (includes SQL injection, file path traversal detection)
+# 5. Test beta modules (includes network security, SQL injection, file path traversal)
 python NuPkgAudit.py packages --modules modules-beta --sev-high
 ```
 
 ### Typical Output Summary
 ```
 Issues by Severity:
-  HIGH: 21        # Hardcoded credentials, network issues, secrets
+  HIGH: 21        # Hardcoded credentials, secrets, certificates
   MEDIUM: 47      # Dynamic patterns, weak configurations
   LOW: 8          # Best practice violations
   FALSE-POSITIVE: 11  # Unresolved config references, legitimate schemas
   
-Modules loaded: 7 (client_certificate_password, hardcoded_secrets_detection, insecure_network_detection, password_detection, secure_text_detection, token_detection, username_detection)
+Modules loaded: [displays actual count of active modules]
 ```
 
 ## Security Considerations
