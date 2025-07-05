@@ -155,6 +155,6 @@ def resolve_in_config_value(value: str, package_path: Path) -> Optional[str]:
     # Get the configuration value
     config_value = get_config_value(config_file, config_key)
     if config_value:
-        logger.info(f"Resolved in_config '{config_key}' to value from {config_file}")
+        logger.debug(f"Resolved in_config '{config_key}' to value from {config_file}")
         return config_value
     return None 
