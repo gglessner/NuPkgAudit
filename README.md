@@ -1,16 +1,18 @@
 # NuPkgAudit - UIPath Automation Security Auditor v3.0
 
-A comprehensive modular security auditing framework for UIPath automation packages that scans for security vulnerabilities, hardcoded credentials, and configuration issues with advanced pattern detection and Config.xlsx resolution.
+A comprehensive modular security auditing framework for UIPath automation packages that scans for security vulnerabilities, hardcoded credentials, and configuration issues with advanced pattern detection, real-time feedback, and color-coded reporting.
 
 ## Overview
 
-NuPkgAudit is a sophisticated security auditing tool designed specifically for UIPath automation projects. It provides an extensible modular framework that scans UIPath packages for various security issues including hardcoded credentials, insecure string handling, configuration vulnerabilities, and authentication data exposure. The tool features advanced pattern detection for dynamic configuration retrieval patterns and intelligent Config.xlsx resolution.
+NuPkgAudit is a sophisticated security auditing tool designed specifically for UIPath automation projects. It provides an extensible modular framework that scans UIPath packages for various security issues including hardcoded credentials, insecure network configurations, SQL injection vulnerabilities, file path traversal, and authentication data exposure. The tool features advanced pattern detection, intelligent Config.xlsx resolution, real-time scanning feedback, and color-coded output for enhanced usability.
 
 ## Key Features
 
-- **🔧 Modular Architecture**: Extensible framework with 5 specialized security modules
-- **🔍 Comprehensive Scanning**: Scans multiple file types (.xaml, .vb, .cs, .txt, .json, .xml, .config, .ini)
-- **🛡️ Advanced Security Detection**: Identifies hardcoded credentials, tokens, usernames, and secure text patterns
+- **🔧 Modular Architecture**: Extensible framework with 9 specialized security modules + beta modules
+- **🔍 Comprehensive Scanning**: Scans multiple file types (.xaml, .vb, .cs, .txt, .json, .xml, .config, .ini, .xlsx)
+- **🛡️ Advanced Security Detection**: Identifies hardcoded credentials, network vulnerabilities, SQL injection, and more
+- **⚡ Real-Time Feedback**: `--inline` mode shows issues immediately as packages are scanned
+- **🎨 Color-Coded Output**: RED for HIGH severity, YELLOW for MEDIUM, CYAN for LOW, with timestamps
 - **⚙️ Sophisticated Pattern Detection**: Detects complex dynamic retrieval patterns including:
   - `in_AuthenticationData` patterns
   - `Config_data` patterns  
@@ -23,7 +25,8 @@ NuPkgAudit is a sophisticated security auditing tool designed specifically for U
 - **🔆 Enhanced Highlighting**: Yellow highlighting with "→" format for resolved values and missing config keys
 - **📈 Flexible Severity Levels**: HIGH, MEDIUM, LOW, INFO, ERROR, FALSE-POSITIVE classifications
 - **📄 Multiple Output Formats**: Text reports, JSON, and Excel export capabilities
-- **🎨 Cross-Platform Color Support**: Uses colorama for consistent colored output
+- **🔇 Configurable Logging**: `--warn` flag to control warning visibility, timestamps for package scanning
+- **🧪 Beta Module Support**: Separate `modules-beta/` directory for experimental or high-false-positive modules
 
 ## Installation
 
@@ -58,10 +61,16 @@ python NuPkgAudit.py packages
 ### Advanced Usage
 
 ```bash
+# Real-time feedback with inline mode
+python NuPkgAudit.py packages --inline --sev-high
+
+# Show warnings (hidden by default)
+python NuPkgAudit.py packages --warn
+
 # Include FALSE-POSITIVE findings in report
 python NuPkgAudit.py packages --sev-fp
 
-# Generate text report
+# Generate text report with color output
 python NuPkgAudit.py packages --output report.txt
 
 # Generate JSON results
@@ -71,11 +80,14 @@ python NuPkgAudit.py packages --json results.json
 python NuPkgAudit.py packages --sev-high
 python NuPkgAudit.py packages --sev-medium --sev-low
 
-# Multiple severity filters
-python NuPkgAudit.py packages --sev-high --sev-medium --output critical_issues.txt
+# Multiple severity filters with real-time feedback
+python NuPkgAudit.py packages --sev-high --sev-medium --inline --output critical_issues.txt
 
 # Verbose output with detailed logging
 python NuPkgAudit.py packages --verbose
+
+# Use beta modules (experimental)
+python NuPkgAudit.py packages --modules modules-beta
 ```
 
 ### Command Line Options
@@ -87,6 +99,8 @@ python NuPkgAudit.py packages --verbose
 | `--output, -o` | Output file for text report |
 | `--json, -j` | Output file for JSON results |
 | `--verbose, -v` | Enable verbose output with detailed logging |
+| `--warn, -w` | Show warning messages (hidden by default) |
+| `--inline, -i` | Show issues immediately as each package is scanned (real-time feedback) |
 | `--sev-high` | Include HIGH severity findings |
 | `--sev-medium` | Include MEDIUM severity findings |
 | `--sev-low` | Include LOW severity findings |
@@ -96,7 +110,9 @@ python NuPkgAudit.py packages --verbose
 
 ## Security Modules
 
-### 1. Password Detection Module (`password_detection.py`)
+### Active Modules (`modules/`)
+
+#### 1. Password Detection Module (`password_detection.py`)
 **Detects hardcoded Password, in_Password, and out_Password attributes in .xaml files.**
 
 **Pattern Detection:**
@@ -105,23 +121,9 @@ python NuPkgAudit.py packages --verbose
 - `Config_data` retrieval patterns → **MEDIUM** 
 - `DirectCast` configuration patterns → **MEDIUM**
 - `NetworkCredential` with hardcoded values → **HIGH**
-- `in_config` patterns with Config.xlsx resolution:
-  - Found in Config.xlsx → **HIGH** (with resolved value)
-  - Not found in Config.xlsx → **FALSE-POSITIVE** (with highlighting)
+- `in_config` patterns with Config.xlsx resolution
 
-**Example Detections:**
-```xml
-<!-- HIGH: Hardcoded password -->
-<Assign Password="hardcoded123" />
-
-<!-- MEDIUM: Dynamic authentication data -->
-<Assign Password="[in_AuthenticationData(&quot;api_password&quot;).ToString]" />
-
-<!-- FALSE-POSITIVE: Config key not found -->
-<Assign Password="[In_Config(&quot;MissingKey&quot;).ToString] → Value not in Config.xlsx" />
-```
-
-### 2. Secure Text Detection Module (`secure_text_detection.py`)
+#### 2. Secure Text Detection Module (`secure_text_detection.py`)
 **Detects hardcoded SecureText attributes with comprehensive pattern analysis.**
 
 **Advanced Pattern Detection:**
@@ -130,47 +132,127 @@ python NuPkgAudit.py packages --verbose
 - `CType io_Config` patterns → **MEDIUM**
 - `DirectCast in_ConfigDetails` patterns → **MEDIUM**
 - `TryCast Config_Data` patterns → **MEDIUM**
-- `TryCast in_config` patterns → **MEDIUM**
-- `DirectCast in_Config` patterns → **MEDIUM**
-- All with case-insensitive detection and Config.xlsx resolution
 
-**Example Detections:**
-```xml
-<!-- MEDIUM: Dynamic credentials retrieval -->
-<Assign SecureText="[io_Credentials(&quot;domain&quot;).SecurePassword]" />
-
-<!-- MEDIUM: NetworkCredential with JSON -->
-<Assign SecureText="[(new System.Net.Network.NetworkCredential(&quot;&quot;, in_JsonObject(&quot;password&quot;).ToString)).SecurePassword]" />
-
-<!-- FALSE-POSITIVE: Unresolved config -->
-<Assign SecureText="[TryCast(in_config(&quot;My_Pass&quot;), SecureString)] → Value not in Config.xlsx" />
-```
-
-### 3. Token Detection Module (`token_detection.py`)
+#### 3. Token Detection Module (`token_detection.py`)
 **Scans for hardcoded Token, in_Token, and out_Token attributes.**
 
-**Features:**
-- Hardcoded token detection → **HIGH**
-- Variable format validation
-- Config.xlsx resolution for `in_config` patterns
-- FALSE-POSITIVE classification for missing config keys
-
-### 4. Username Detection Module (`username_detection.py`)
+#### 4. Username Detection Module (`username_detection.py`)
 **Detects hardcoded Username, in_Username, and out_Username attributes.**
 
-**Features:**
-- Hardcoded username detection → **HIGH**
-- Advanced `in_config` pattern detection
-- Config.xlsx value resolution
-- Case-insensitive pattern matching
-
-### 5. Client Certificate Password Detection Module (`client_certificate_password.py`)
+#### 5. Client Certificate Password Detection Module (`client_certificate_password.py`)
 **Scans for ClientCertificatePassword and SecureClientCertificatePassword attributes.**
 
+#### 6. SQL Injection Detection Module (`sql_injection_detection.py`)
+**Detects SQL injection vulnerabilities in database queries and connection strings.**
+
 **Features:**
-- Hardcoded certificate password detection → **HIGH**
-- `in_config` pattern resolution
-- FALSE-POSITIVE classification for unresolved configurations
+- String concatenation in SQL queries → **HIGH**
+- Unparameterized queries → **HIGH**
+- Dynamic SQL construction → **MEDIUM**
+- Stored procedure calls → **LOW**
+
+#### 7. File Path Traversal Detection Module (`file_path_traversal_detection.py`)
+**Detects file path traversal vulnerabilities and unsafe file operations.**
+
+**Features:**
+- Directory traversal patterns (`../`, `..\\`) → **HIGH**
+- Absolute path injection → **MEDIUM**
+- Environment variable abuse → **MEDIUM**
+- Unsafe file operations → **LOW**
+
+#### 8. Hardcoded Secrets Detection Module (`hardcoded_secrets_detection.py`)
+**Detects hardcoded secrets including API keys, private keys, and connection strings.**
+
+**Features:**
+- API keys and tokens → **HIGH**
+- Private keys and certificates → **HIGH**
+- Database connection strings → **HIGH**
+- JWT tokens → **MEDIUM**
+
+#### 9. Insecure Network Detection Module (`insecure_network_detection.py`)
+**Detects insecure network configurations and HTTP usage for sensitive data.**
+
+**Features:**
+- HTTP usage for sensitive data → **HIGH**
+- Certificate validation bypasses → **HIGH**
+- Weak TLS settings → **MEDIUM**
+- Legitimate schema usage → **FALSE-POSITIVE**
+
+### Beta Modules (`modules-beta/`)
+
+#### 1. XLSX Secrets Detection Module (`xlsx_secrets_detection.py`)
+**Scans Excel files for sensitive data in configuration sheets.**
+
+**Features:**
+- Scans Config.xlsx files for dangerous keys
+- Detects passwords, API keys, tokens in spreadsheets
+- May have false positives with common terms
+
+#### 2. Command Injection Detection Module (`command_injection_detection.py`)
+**Detects command injection vulnerabilities in system calls.**
+
+**Features:**
+- Shell command injection → **HIGH**
+- Process execution with user input → **HIGH**
+- PowerShell command construction → **MEDIUM**
+- Moved to beta due to potential false positives
+
+## Real-Time Scanning with --inline Mode
+
+The `--inline` flag provides immediate feedback as packages are scanned:
+
+```bash
+python NuPkgAudit.py packages --inline --sev-high
+```
+
+**Features:**
+- **Real-time issue display**: Shows issues immediately as found
+- **Color-coded severity**: RED for HIGH, YELLOW for MEDIUM, CYAN for LOW
+- **Progress indicators**: Shows scanning progress and completion status
+- **Timestamped package scanning**: Shows when each package starts processing
+- **Completion summary**: Total packages, issues found, and processing time
+
+**Example Output:**
+```
+>>> INLINE MODE ENABLED - Real-time feedback
+>>> Scanning 9 packages with 9 modules
+>>> Showing severities: HIGH, MEDIUM
+================================================================================
+
+2025-07-05 02:19:23,479 - INFO - Scanning package: package1
+2025-07-05 02:19:23,528 - INFO - Scanning package: package2
+
+[PACKAGE] package2
+  [HIGH] Hard-coded Password detected
+    File: packages\package2\TestPassword.xaml
+    Line: 15
+    Content: Password="HardcodedPass"
+
+>>> INLINE SCANNING COMPLETE
+>>> Total packages scanned: 9
+>>> Packages with issues: 3
+>>> Total issues found: 12
+================================================================================
+>>> Full detailed report follows below...
+```
+
+## Color-Coded Output
+
+The tool uses color coding throughout for enhanced readability:
+
+| Color | Severity | Usage |
+|-------|----------|-------|
+| **RED** | HIGH | Critical security issues |
+| **YELLOW** | MEDIUM | Potential security concerns |
+| **CYAN** | LOW | Best practice violations |
+| **BLUE** | INFO | Informational findings |
+| **MAGENTA** | ERROR | Scan errors or exceptions |
+
+Colors are applied to:
+- Severity levels in summary sections
+- `[SEVERITY]` tags in detailed findings
+- Package names in reports
+- Inline mode headers and messages
 
 ## Config.xlsx Resolution
 
@@ -199,21 +281,39 @@ The tool automatically searches for and resolves configuration values from `Conf
 
 | Severity | Description | Examples |
 |----------|-------------|----------|
-| **HIGH** | Definite security risks | Hardcoded passwords, resolved config values |
-| **MEDIUM** | Potential security concerns | Dynamic authentication patterns, configuration retrieval |
+| **HIGH** | Definite security risks | Hardcoded passwords, SQL injection, path traversal |
+| **MEDIUM** | Potential security concerns | Dynamic patterns, weak configurations |
 | **LOW** | Best practice violations | Minor configuration issues |
 | **INFO** | Informational findings | Documentation or context information |
 | **ERROR** | Scan errors or exceptions | File read errors, parsing failures |
-| **FALSE-POSITIVE** | Likely safe patterns | Unresolved config references, template patterns |
+| **FALSE-POSITIVE** | Likely safe patterns | Unresolved config references, legitimate schemas |
+
+## Logging and Warning Control
+
+The tool provides flexible logging control:
+
+**Default Behavior:**
+- Shows timestamped package scanning progress
+- Hides warning messages for cleaner output
+- Shows errors and critical information
+
+**With `--warn` flag:**
+- Shows warning messages (config keys not found, etc.)
+- Useful for debugging configuration issues
+
+**With `--verbose` flag:**
+- Shows all logging levels including debug information
+- Detailed module execution information
 
 ## Output Formats
 
 ### Text Report
 Comprehensive text-based report with:
 - Executive summary with issue counts by severity
+- Color-coded severity levels
 - Package-by-package breakdown
 - Detailed findings with context
-- Color-coded highlighting (yellow for matches)
+- Yellow highlighting for matches
 - Module execution statistics
 
 ### JSON Output
@@ -225,53 +325,64 @@ Structured JSON containing:
 
 ### Console Output
 Real-time scanning progress with:
-- Package processing status
+- Timestamped package processing status
+- Color-coded severity indicators
 - Config.xlsx resolution messages
-- Warning notifications for missing keys
 - Final summary statistics
 
-## Advanced Pattern Detection
+## Project Structure
 
-The tool recognizes sophisticated UIPath patterns including:
-
-### Authentication Data Patterns
-```xml
-<Assign Password="[in_AuthenticationData(&quot;mypassword&quot;).ToString]" />
-<Assign Password="[in_Authentication(&quot;pwd&quot;).ToString]" />
 ```
-
-### Configuration Data Patterns  
-```xml
-<Assign Password="[Config_data(&quot;AccessCode&quot;).ToString]" />
-<Assign Password="[config_data(&quot;secret_key&quot;).ToString]" />
-```
-
-### DirectCast/TryCast Patterns
-```xml
-<Assign SecureText="[DirectCast(Config(&quot;My_password&quot;),SecureString)]" />
-<Assign SecureText="[TryCast(Config_Data(&quot;Asset_Pass&quot;), System.Security.SecureString)]" />
-```
-
-### NetworkCredential Patterns
-```xml
-<Assign Password="[new System.net.NetworkCredential(&quot;&quot;,&quot;pass1234&quot;).SecurePassword]" />
-<Assign SecureText="[(new System.Net.Network.NetworkCredential(&quot;&quot;, in_JsonObject(&quot;password&quot;).ToString)).SecurePassword]" />
-```
-
-### io_Config and io_Credentials Patterns
-```xml
-<Assign SecureText="[ctype(io_Config(&quot;Password&quot;),system.security.SecureString)]" />
-<Assign SecureText="[io_Credentials(&quot;domain&quot;).SecurePassword]" />
+NuPkgAudit3/
+├── NuPkgAudit.py                      # Main auditor script
+├── modules/                           # Active security modules
+│   ├── client_certificate_password.py # Certificate password detection
+│   ├── file_path_traversal_detection.py # Path traversal vulnerabilities
+│   ├── hardcoded_secrets_detection.py # API keys, tokens, secrets
+│   ├── insecure_network_detection.py  # HTTP usage, cert bypasses
+│   ├── password_detection.py          # Password pattern detection
+│   ├── secure_text_detection.py       # SecureText pattern detection
+│   ├── sql_injection_detection.py     # SQL injection vulnerabilities
+│   ├── token_detection.py             # Token pattern detection
+│   └── username_detection.py          # Username pattern detection
+├── modules-beta/                      # Beta/experimental modules
+│   ├── command_injection_detection.py # Command injection (high FP rate)
+│   └── xlsx_secrets_detection.py      # Excel file scanning (slow)
+├── libraries/                         # Helper libraries
+│   ├── config_helper.py               # Config.xlsx resolution utilities
+│   └── highlight_helper.py            # Text highlighting functions
+├── packages/                          # Test packages (for development)
+├── requirements.txt                   # Python dependencies
+├── create_config_xlsx.py             # Config.xlsx creation utility
+├── test_results.xlsx                 # Test results output
+├── LICENSE                           # GNU GPL v3 license
+└── README.md                         # This comprehensive guide
 ```
 
 ## Creating Custom Modules
 
 To create a custom security module:
 
-1. Create a Python file in the `modules/` directory
-2. Implement the required functions:
+1. Create a Python file in the `modules/` directory (or `modules-beta/` for experimental modules)
+2. Add the standard GPL header with author and license information
+3. Implement the required functions:
 
 ```python
+#!/usr/bin/env python3
+"""
+Custom Security Module
+Description of what this module detects.
+
+Author: Your Name <your.email@example.com>
+License: GNU General Public License v3.0
+Copyright (C) 2024 Your Name
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+"""
+
 def scan_package(package_path: str, root_package_name: str = None, scanned_files: set = None) -> List[Dict[str, Any]]:
     """
     Scan a package for security issues.
@@ -287,11 +398,6 @@ def scan_package(package_path: str, root_package_name: str = None, scanned_files
     issues = []
     # Implementation here
     return issues
-
-def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str = None) -> List[Dict[str, Any]]:
-    """Scan individual XAML files"""
-    # Implementation here
-    pass
 ```
 
 3. Return issue dictionaries with this structure:
@@ -311,52 +417,35 @@ def scan_xaml_file(file_path: Path, root_package: Path, root_package_name: str =
 }
 ```
 
-## Project Structure
-
-```
-NuPkgAudit3/
-├── NuPkgAudit.py                      # Main auditor script
-├── modules/                           # Security modules directory
-│   ├── client_certificate_password.py # Certificate password detection
-│   ├── password_detection.py          # Password pattern detection
-│   ├── secure_text_detection.py       # SecureText pattern detection  
-│   ├── token_detection.py             # Token pattern detection
-│   └── username_detection.py          # Username pattern detection
-├── libraries/                         # Helper libraries
-│   ├── config_helper.py               # Config.xlsx resolution utilities
-│   └── highlight_helper.py            # Text highlighting functions
-├── packages/                          # Test packages (for development)
-├── requirements.txt                   # Python dependencies
-├── create_config_xlsx.py             # Config.xlsx creation utility
-├── LICENSE                           # GNU GPL v3 license
-└── README.md                         # This comprehensive guide
-```
-
 ## Example Usage Scenarios
 
 ### Security Audit Workflow
 ```bash
-# 1. Quick security scan
-python NuPkgAudit.py packages
+# 1. Quick security scan with real-time feedback
+python NuPkgAudit.py packages --inline
 
-# 2. Comprehensive audit including potential false positives  
+# 2. Critical issues only with colors
+python NuPkgAudit.py packages --sev-high --inline
+
+# 3. Comprehensive audit including potential false positives  
 python NuPkgAudit.py packages --sev-fp --output full_audit.txt
 
-# 3. Critical issues only
-python NuPkgAudit.py packages --sev-high --sev-error --json critical.json
-
 # 4. Development workflow - all findings with verbose logging
-python NuPkgAudit.py packages --sev-high --sev-medium --sev-fp --verbose
+python NuPkgAudit.py packages --sev-high --sev-medium --sev-fp --verbose --warn
+
+# 5. Test beta modules
+python NuPkgAudit.py packages --modules modules-beta --sev-high
 ```
 
 ### Typical Output Summary
 ```
 Issues by Severity:
-  HIGH: 21        # Hardcoded credentials, resolved config values
-  MEDIUM: 47      # Dynamic patterns, authentication data access
-  FALSE-POSITIVE: 11  # Unresolved config references
+  HIGH: 21        # Hardcoded credentials, SQL injection, path traversal
+  MEDIUM: 47      # Dynamic patterns, weak configurations
+  LOW: 8          # Best practice violations
+  FALSE-POSITIVE: 11  # Unresolved config references, legitimate schemas
   
-Modules loaded: 5 (client_certificate_password, password_detection, secure_text_detection, token_detection, username_detection)
+Modules loaded: 9 (client_certificate_password, file_path_traversal_detection, hardcoded_secrets_detection, insecure_network_detection, password_detection, secure_text_detection, sql_injection_detection, token_detection, username_detection)
 ```
 
 ## Security Considerations
@@ -366,6 +455,7 @@ Modules loaded: 5 (client_certificate_password, password_detection, secure_text_
 - **False Positive Analysis**: Review FALSE-POSITIVE findings to ensure config keys exist where expected
 - **Context Review**: Always manually review findings considering business context
 - **Sensitive Environment**: Use in controlled environments when scanning production automation code
+- **Beta Module Caution**: Modules in `modules-beta/` may have higher false positive rates
 
 ## Performance & Scalability
 
@@ -373,6 +463,7 @@ Modules loaded: 5 (client_certificate_password, password_detection, secure_text_
 - **Memory Efficient**: Processes files individually to minimize memory usage
 - **Large Package Support**: Handles enterprise-scale UIPath automation projects
 - **Incremental Scanning**: Tracks scanned files to avoid duplicate processing in nested packages
+- **Real-time Feedback**: Inline mode provides immediate results without waiting for completion
 
 ## Troubleshooting
 
@@ -391,15 +482,22 @@ pip install -r requirements.txt
 **Color Output Issues:**
 - Install colorama: `pip install colorama`
 - Ensure terminal supports ANSI color codes
+- Colors automatically disabled on unsupported terminals
+
+**High False Positive Rate:**
+- Move problematic modules to `modules-beta/`
+- Use severity filters to focus on critical issues
+- Review FALSE-POSITIVE findings for legitimate patterns
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/new-security-module`)
 3. Add your security module following the established patterns
-4. Test thoroughly with various UIPath automation patterns
-5. Update README.md with new module documentation
-6. Submit a pull request with detailed description
+4. Include proper GPL header with author information
+5. Test thoroughly with various UIPath automation patterns
+6. Update README.md with new module documentation
+7. Submit a pull request with detailed description
 
 ## License
 

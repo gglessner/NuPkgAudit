@@ -41,7 +41,12 @@ except ImportError:
     COLORAMA_AVAILABLE = False
     # Fallback color codes (may not work on all Windows terminals)
     class Fore:
+        RED = '\033[91m'
         YELLOW = '\033[93m'
+        CYAN = '\033[96m'
+        BLUE = '\033[94m'
+        MAGENTA = '\033[95m'
+        WHITE = '\033[97m'
     class Style:
         RESET_ALL = '\033[0m'
 
@@ -54,9 +59,11 @@ logger = logging.getLogger(__name__)
 class UIPathSecurityAuditorV3:
     """Modular security auditor for UIPath automation packages."""
     
-    def __init__(self, scan_directory: str, modules_directory: str = "modules"):
+    def __init__(self, scan_directory: str, modules_directory: str = "modules", inline_mode: bool = False, severity_filter: set = None):
         self.scan_directory = Path(scan_directory)
         self.modules_directory = Path(modules_directory)
+        self.inline_mode = inline_mode
+        self.severity_filter = severity_filter or {'ERROR', 'HIGH', 'MEDIUM', 'LOW', 'INFO'}
         self.results = {
             'scan_timestamp': datetime.now().isoformat(),
             'total_packages': 0,
@@ -107,6 +114,68 @@ class UIPathSecurityAuditorV3:
         
         logger.info(f"Loaded {len(modules)} modules in alphabetical order")
         return modules
+    
+    def print_inline_issues(self, package_name: str, issues: List[Dict[str, Any]]) -> None:
+        """Print issues immediately for inline reporting mode."""
+        if not self.inline_mode or not issues:
+            return
+        
+        # Filter issues by severity
+        filtered_issues = [issue for issue in issues if issue['severity'] in self.severity_filter]
+        if not filtered_issues:
+            return
+        
+        # Print package header
+        print(f"\n{Fore.YELLOW}[PACKAGE] {package_name}{Style.RESET_ALL}")
+        print(f"   Found {len(filtered_issues)} issue(s)")
+        print("-" * 60)
+        
+        # Print each issue
+        for issue in filtered_issues:
+            severity = issue['severity']
+            color = self.get_severity_color(severity)
+            
+            reset = self.get_reset_code()
+            print(f"  {color}[{severity}]{reset} {issue['description']}")
+            print(f"    File: {issue['file']}")
+            
+            if issue.get('cell_address'):
+                print(f"    Cell: {issue['cell_address']}")
+            if issue.get('line', 0) > 0:
+                print(f"    Line: {issue['line']}")
+            
+            print(f"    Content: {issue['line_content']}")
+            
+            if issue.get('full_line') and issue.get('matched_text'):
+                highlighted_context = highlight_match(issue['full_line'], issue['matched_text'])
+                print(f"    Context: {highlighted_context}")
+            
+            if issue.get('module'):
+                print(f"    Module: {issue['module']}")
+            
+            print()  # Empty line between issues
+    
+    def get_severity_color(self, severity: str) -> str:
+        """Get the color code for a severity level."""
+        if COLORAMA_AVAILABLE:
+            if severity == 'HIGH':
+                return Fore.RED
+            elif severity == 'MEDIUM':
+                return Fore.YELLOW
+            elif severity == 'LOW':
+                return Fore.CYAN
+            elif severity == 'INFO':
+                return Fore.BLUE
+            elif severity == 'ERROR':
+                return Fore.MAGENTA
+            else:
+                return Fore.WHITE
+        else:
+            return ""
+    
+    def get_reset_code(self) -> str:
+        """Get the reset code for color formatting."""
+        return Style.RESET_ALL if COLORAMA_AVAILABLE else ""
     
     def scan_package(self, package_path: Path, print_info: bool = True, root_package_name: str = None) -> Dict[str, Any]:
         """Scan a single UIPath package using all loaded modules."""
@@ -171,6 +240,9 @@ class UIPathSecurityAuditorV3:
                 'line': 0
             })
         
+        # Print issues inline if enabled
+        self.print_inline_issues(display_package_name, package_results['issues'])
+        
         return package_results
     
     def scan_all_packages(self) -> Dict[str, Any]:
@@ -185,6 +257,15 @@ class UIPathSecurityAuditorV3:
         top_level_directories.sort()
         logger.info(f"Found {len(top_level_directories)} top-level package directories to scan in alphabetical order")
         logger.info(f"Using {len(self.modules)} modules")
+        
+        # Print inline mode header if enabled
+        if self.inline_mode:
+            cyan_color = self.get_severity_color('LOW')  # Use cyan for headers
+            reset = self.get_reset_code()
+            print(f"\n{cyan_color}>>> INLINE MODE ENABLED - Real-time feedback{reset}")
+            print(f">>> Scanning {len(top_level_directories)} packages with {len(self.modules)} modules")
+            print(f">>> Showing severities: {', '.join(sorted(self.severity_filter))}")
+            print("=" * 80)
         
         for dir_path in top_level_directories:
             print_info = True
@@ -212,6 +293,19 @@ class UIPathSecurityAuditorV3:
                 if root_package_name not in [p['package_name'] for p in self.results['packages'].values() if p['issue_count'] > 0]:
                     self.results['packages_with_issues'] += 1
                 self.results['total_issues'] += package_results['issue_count']
+        
+        # Print inline mode completion message
+        if self.inline_mode:
+            cyan_color = self.get_severity_color('LOW')  # Use cyan for headers
+            yellow_color = self.get_severity_color('MEDIUM')  # Use yellow for report notice
+            reset = self.get_reset_code()
+            print(f"\n{cyan_color}>>> INLINE SCANNING COMPLETE{reset}")
+            print(f">>> Total packages scanned: {self.results['total_packages']}")
+            print(f">>> Packages with issues: {self.results['packages_with_issues']}")
+            print(f">>> Total issues found: {self.results['total_issues']}")
+            print("=" * 80)
+            print(f"{yellow_color}>>> Full detailed report follows below...{reset}\n")
+        
         return self.results
     
     def generate_report(self, output_file: str = None, severity_filter: set = None) -> str:
@@ -292,6 +386,83 @@ class UIPathSecurityAuditorV3:
         
         return report
     
+    def generate_colored_report(self, severity_filter: set = None) -> str:
+        """Generate a comprehensive security report with color coding for console output."""
+        report_lines = []
+        
+        # Apply severity filter if specified
+        filtered_results = self.results.copy()
+        if severity_filter:
+            for package in filtered_results['packages'].values():
+                package['issues'] = [i for i in package['issues'] if i['severity'] in severity_filter]
+                package['issue_count'] = len(package['issues'])
+            
+            # Recalculate totals
+            filtered_results['total_issues'] = sum(p['issue_count'] for p in filtered_results['packages'].values())
+            filtered_results['packages_with_issues'] = sum(1 for p in filtered_results['packages'].values() if p['issue_count'] > 0)
+        
+        # Header
+        report_lines.append("=" * 80)
+        report_lines.append("UIPath Automation Security Audit Report v3.0 - Modular Framework")
+        report_lines.append("=" * 80)
+        report_lines.append(f"Scan Date: {filtered_results['scan_timestamp']}")
+        report_lines.append(f"Total Packages Scanned: {filtered_results['total_packages']}")
+        report_lines.append(f"Packages with Issues: {filtered_results['packages_with_issues']}")
+        report_lines.append(f"Total Issues Found: {filtered_results['total_issues']}")
+        # Print each module's name and description
+        report_lines.append("Modules Loaded:")
+        for module in self.modules:
+            desc = getattr(module, 'MODULE_DESCRIPTION', '(No description provided)')
+            report_lines.append(f"  - {module.__name__}: {desc}")
+        if severity_filter:
+            report_lines.append(f"Filtered by Severity: {', '.join(sorted(severity_filter))}")
+        report_lines.append("")
+        
+        # Issues by Severity (with colors)
+        severity_counts = {'HIGH': 0, 'MEDIUM': 0, 'LOW': 0, 'INFO': 0, 'ERROR': 0, 'FALSE-POSITIVE': 0}
+        for package in filtered_results['packages'].values():
+            for issue in package['issues']:
+                severity_counts[issue['severity']] += 1
+        
+        report_lines.append("Issues by Severity:")
+        for severity, count in severity_counts.items():
+            if count > 0:
+                color = self.get_severity_color(severity)
+                reset = self.get_reset_code()
+                report_lines.append(f"  {color}{severity}{reset}: {count}")
+        report_lines.append("")
+        
+        # Detailed Findings (with colors)
+        report_lines.append("Detailed Findings:")
+        report_lines.append("-" * 80)
+        report_lines.append("")
+        
+        for package_name, package in filtered_results['packages'].items():
+            if package['issue_count'] > 0:
+                package_color = self.get_severity_color('INFO')  # Use blue for package names
+                reset = self.get_reset_code()
+                report_lines.append(f"{package_color}Package: {package_name}{reset}")
+                report_lines.append(f"Issues Found: {package['issue_count']}")
+                
+                for issue in package['issues']:
+                    severity = issue['severity']
+                    color = self.get_severity_color(severity)
+                    report_lines.append(f"  {color}[{severity}]{reset} {issue['description']}")
+                    report_lines.append(f"    File: {issue['file']}")
+                    if issue.get('cell_address'):
+                        report_lines.append(f"    Cell: {issue['cell_address']}")
+                    if issue.get('line', 0) > 0:
+                        report_lines.append(f"    Line: {issue['line']}")
+                    report_lines.append(f"    Content: {issue['line_content']}")
+                    if issue.get('full_line') and issue.get('matched_text'):
+                        highlighted_context = highlight_match(issue['full_line'], issue['matched_text'])
+                        report_lines.append(f"    Context: {highlighted_context}")
+                    if issue.get('module'):
+                        report_lines.append(f"    Module: {issue['module']}")
+                    report_lines.append("")
+        
+        return "\n".join(report_lines)
+    
     def export_json(self, output_file: str, severity_filter: set = None) -> None:
         """Export results to JSON format."""
         # Apply severity filter if specified
@@ -321,6 +492,8 @@ Examples:
   python NuPkgAudit_v3.py /path/to/packages --modules /path/to/modules
   python NuPkgAudit_v3.py /path/to/packages --sev-high --output report.txt
   python NuPkgAudit_v3.py /path/to/packages --output report.txt --json results.json
+  python NuPkgAudit_v3.py /path/to/packages --warn --verbose
+  python NuPkgAudit_v3.py /path/to/packages --inline --sev-high
         """
     )
     
@@ -329,6 +502,8 @@ Examples:
     parser.add_argument('--output', '-o', help='Output file for text report (optional)')
     parser.add_argument('--json', '-j', help='Output file for JSON results (optional)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
+    parser.add_argument('--warn', '-w', action='store_true', help='Show warning messages (hidden by default)')
+    parser.add_argument('--inline', '-i', action='store_true', help='Show issues immediately as each package is scanned (real-time feedback)')
     
     # Severity filtering
     parser.add_argument('--sev-high', action='store_true', help='Only show HIGH severity findings')
@@ -339,8 +514,27 @@ Examples:
     
     args = parser.parse_args()
     
+    # Configure logging with timestamps
     if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+    elif args.warn:
+        # Show warnings when --warn flag is used
+        logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
+    else:
+        # Show INFO for package scanning progress but hide warnings
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+        # Create a filter to suppress WARNING messages but allow INFO, ERROR, and CRITICAL
+        class NoWarningFilter(logging.Filter):
+            def filter(self, record):
+                return record.levelno != logging.WARNING
+        
+        # Apply the filter to the root logger and all existing loggers
+        root_logger = logging.getLogger()
+        root_logger.addFilter(NoWarningFilter())
+        
+        # Also apply to all handlers to ensure warnings are suppressed everywhere
+        for handler in root_logger.handlers:
+            handler.addFilter(NoWarningFilter())
     
     try:
         # Determine which severities to include
@@ -360,14 +554,14 @@ Examples:
             selected_severities = {'ERROR', 'HIGH', 'MEDIUM', 'LOW', 'INFO'}
         
         # Create auditor and scan packages
-        auditor = UIPathSecurityAuditorV3(args.directory, args.modules)
+        auditor = UIPathSecurityAuditorV3(args.directory, args.modules, inline_mode=args.inline, severity_filter=selected_severities)
         results = auditor.scan_all_packages()
         
-        # Generate report (stdout only by default)
-        report = auditor.generate_report(severity_filter=selected_severities)
+        # Generate colored report for console output
+        colored_report = auditor.generate_colored_report(severity_filter=selected_severities)
         
-        # Always print report to console
-        print(report)
+        # Always print colored report to console
+        print(colored_report)
         
         # Save to file only if explicitly requested
         if args.output:

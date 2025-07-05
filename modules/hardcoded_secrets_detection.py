@@ -1,10 +1,24 @@
 #!/usr/bin/env python3
 """
-Hardcoded Secrets Detection Module for UIPath Security Audit Tool
-Detects hardcoded secrets and sensitive credentials in UIPath .xaml files
+Hardcoded Secrets Detection Module
+Scans for hardcoded secrets and sensitive credentials in UIPath automation.
 
-This module identifies patterns for various types of secrets including API keys,
-private keys, tokens, connection strings, and other sensitive credentials.
+Author: Garland Glessner <gglessner@gmail.com>
+License: GNU General Public License v3.0
+Copyright (C) 2024 Garland Glessner
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import re
@@ -14,21 +28,15 @@ import base64
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 
-# Add libraries path to sys.path to import config_helper
-sys.path.insert(0, str(Path(__file__).parent.parent / 'libraries'))
+# Add the libraries directory to the path
+sys.path.append(str(Path(__file__).parent.parent / 'libraries'))
 
-try:
-    from config_helper import resolve_in_config_value
-    from highlight_helper import highlight_match
-except ImportError as e:
-    print(f"Error importing libraries: {e}")
-    sys.exit(1)
+from config_helper import resolve_in_config_value
+from highlight_helper import highlight_match
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging
 logger = logging.getLogger(__name__)
 
-# Module description for the main audit tool
 MODULE_DESCRIPTION = "Detects hardcoded secrets including API keys, private keys, JWT tokens, database connection strings, and other sensitive credentials. Flags high-confidence secrets as HIGH risk."
 
 # Secret patterns with confidence levels
