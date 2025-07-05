@@ -181,14 +181,18 @@ SECRET_PATTERNS = {
         'context_required': ['paypal', 'client']
     },
     'twilio_sid': {
-        'pattern': r'AC[a-z0-9]{32}',
-        'confidence': 'HIGH',
-        'description': 'Twilio Account SID detected'
+        'pattern': r'AC[a-fA-F0-9]{32}',
+        'confidence': 'MEDIUM',
+        'description': 'Possible Twilio Account SID detected',
+        'context_required': ['twilio', 'account', 'sid', 'api', 'auth'],
+        'min_length': 34
     },
     'twilio_token': {
-        'pattern': r'SK[a-z0-9]{32}',
+        'pattern': r'SK[a-fA-F0-9]{32}',
         'confidence': 'HIGH',
-        'description': 'Twilio Auth Token detected'
+        'description': 'Twilio Auth Token detected',
+        'context_required': ['twilio', 'auth', 'token', 'api'],
+        'min_length': 34
     },
     'mailgun_key': {
         'pattern': r'key-[a-z0-9]{32}',
@@ -236,6 +240,7 @@ SECRET_PATTERNS = {
 def check_context_requirements(value: str, line: str, context_required: List[str]) -> bool:
     """
     Check if the required context keywords are present in the value or line.
+    Enhanced for better Twilio and service-specific detection.
     
     Args:
         value: The matched value
@@ -246,6 +251,28 @@ def check_context_requirements(value: str, line: str, context_required: List[str
         bool: True if context requirements are met
     """
     combined_text = (value + " " + line).lower()
+    
+    # For Twilio patterns, be more flexible with context matching
+    if any('twilio' in keyword for keyword in context_required):
+        # Look for Twilio-specific indicators in a broader context
+        twilio_indicators = [
+            'twilio', 'account_sid', 'accountsid', 'auth_token', 'authtoken',
+            'api_key', 'apikey', 'messaging', 'sms', 'voice', 'call',
+            'webhook', 'twiml', 'studio', 'verify', 'lookup'
+        ]
+        if any(indicator in combined_text for indicator in twilio_indicators):
+            return True
+        
+        # Check for variable names that suggest Twilio usage
+        twilio_var_patterns = [
+            r'twilio[_\s]*(?:sid|token|key|auth|account)',
+            r'(?:account|auth|api)[_\s]*(?:sid|token|key)',
+            r'(?:sms|voice|call)[_\s]*(?:sid|token|key|auth)',
+        ]
+        if any(re.search(pattern, combined_text) for pattern in twilio_var_patterns):
+            return True
+    
+    # Default behavior: any keyword match
     return any(keyword.lower() in combined_text for keyword in context_required)
 
 def is_likely_false_positive(value: str, pattern_name: str) -> bool:
@@ -282,6 +309,27 @@ def is_likely_false_positive(value: str, pattern_name: str) -> bool:
     # Check for sequential patterns
     if re.search(r'(abc|123|xyz){3,}', value_lower):
         return True
+    
+    # Twilio-specific false positive patterns
+    if pattern_name == 'twilio_sid':
+        # Common Twilio SID false positives
+        twilio_fps = [
+            'ac00000000000000000000000000000000',  # All zeros
+            'acxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',  # All x's
+            'ac11111111111111111111111111111111',  # All ones
+            'acffffffffffffffffffffffffffffffff',  # All f's
+            'acaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',  # All a's
+        ]
+        if value_lower in twilio_fps:
+            return True
+        
+        # Check for obviously fake patterns in Twilio SIDs
+        if re.search(r'ac(0{32}|1{32}|f{32}|a{32})', value_lower):
+            return True
+        
+        # Check for alternating patterns
+        if re.search(r'ac(01){16}|(10){16}|(ab){16}|(ba){16}', value_lower):
+            return True
     
     return False
 
@@ -399,19 +447,26 @@ def scan_hardcoded_secrets(file_path, content, root_package=None):
                                 description = pattern_info['description']
                                 
                                 if re.search(pattern_regex, secret_value, re.IGNORECASE):
-                                    # Check context requirements if specified
-                                    if 'context_required' in pattern_info:
-                                        if not check_context_requirements(secret_value, line, pattern_info['context_required']):
-                                            continue
-                                    
                                     # Check minimum length if specified
                                     if 'min_length' in pattern_info:
                                         if len(secret_value) < pattern_info['min_length']:
                                             continue
                                     
-                                    # Check for false positives
+                                    # Check for false positives first
                                     if is_likely_false_positive(secret_value, pattern_name):
                                         continue
+                                    
+                                    # Check context requirements if specified
+                                    context_met = True
+                                    if 'context_required' in pattern_info:
+                                        context_met = check_context_requirements(secret_value, line, pattern_info['context_required'])
+                                        
+                                        # For Twilio SIDs without context, downgrade to FALSE-POSITIVE
+                                        if not context_met and pattern_name == 'twilio_sid':
+                                            confidence = 'FALSE-POSITIVE'
+                                            description = f'{description} (no Twilio context found - likely false positive)'
+                                        elif not context_met:
+                                            continue
                                     
                                     # Determine severity based on confidence
                                     if confidence == 'HIGH':
