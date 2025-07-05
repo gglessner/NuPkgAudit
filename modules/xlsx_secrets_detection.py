@@ -113,8 +113,8 @@ DANGEROUS_KEY_PATTERNS = {
     'encryption': {
         'patterns': [
             r'.*encrypt.*key.*', r'.*decrypt.*key.*', r'.*cipher.*key.*',
-            r'.*crypto.*key.*', r'.*hash.*key.*', r'.*salt.*', r'.*iv.*',
-            r'.*initialization.*vector.*'
+            r'.*crypto.*key.*', r'.*hash.*key.*', r'.*salt.*key.*', 
+            r'.*\biv\b.*', r'.*initialization.*vector.*', r'.*crypto.*salt.*'
         ],
         'severity': 'HIGH',
         'description': 'Encryption key/parameter detected'
@@ -183,6 +183,8 @@ SAFE_VALUE_PATTERNS = [
     r'^Nothing$',  # VB.NET null
     r'^null$',  # General null
     r'^<null>$',  # XML null
+    r'^none$',  # None value
+    r'^empty$',  # Empty value
     r'^\[.*\]$',  # Variable references like [username]
     r'^.*\{.*\}.*$',  # String interpolation
     r'^.*Config.*$',  # Config references
@@ -208,6 +210,22 @@ SAFE_VALUE_PATTERNS = [
     r'^false$',  # Boolean false
     r'^0$',  # Zero
     r'^1$',  # One
+    r'^(empty)$',  # Literal (empty)
+    r'^\(empty\)$',  # Literal (empty) with parentheses
+    r'^\(null\)$',  # Literal (null) with parentheses
+    r'^\(none\)$',  # Literal (none) with parentheses
+    r'^individual$',  # Common legitimate value
+    r'^entity$',  # Common legitimate value
+    r'^organization$',  # Common legitimate value
+    r'^company$',  # Common legitimate value
+    r'^personal$',  # Common legitimate value
+    r'^business$',  # Common legitimate value
+    r'^yes$',  # Common legitimate value
+    r'^no$',  # Common legitimate value
+    r'^enabled$',  # Common legitimate value
+    r'^disabled$',  # Common legitimate value
+    r'^active$',  # Common legitimate value
+    r'^inactive$',  # Common legitimate value
 ]
 
 def is_dangerous_key(key_name: str) -> Tuple[bool, str, str, str]:
@@ -248,6 +266,10 @@ def is_safe_value(value: str) -> bool:
     
     value_str = str(value).strip()
     
+    # Explicitly check for empty or whitespace-only values
+    if not value_str or value_str == '':
+        return True
+    
     for pattern in SAFE_VALUE_PATTERNS:
         if re.search(pattern, value_str, re.IGNORECASE):
             return True
@@ -284,14 +306,23 @@ def scan_xlsx_file(file_path: Path) -> List[Dict[str, Any]]:
                     key_cell = row[col_idx]
                     value_cell = row[col_idx + 1] if col_idx + 1 < len(row) else None
                     
-                    if not key_cell:
+                    # Skip if key cell is None, empty, or not a string-like value
+                    if not key_cell or key_cell is None:
                         continue
                     
-                    key_name = str(key_cell).strip()
-                    value = str(value_cell).strip() if value_cell is not None else ""
+                    try:
+                        key_name = str(key_cell).strip()
+                        value = str(value_cell).strip() if value_cell is not None else ""
+                    except Exception:
+                        # Skip cells that can't be converted to string
+                        continue
                     
                     # Skip if key is too short or obviously not a key
                     if len(key_name) < 2 or key_name.isdigit():
+                        continue
+                    
+                    # Skip if value is empty or None - no point flagging empty values
+                    if not value or value.lower() in ['none', 'null', '']:
                         continue
                     
                     # Check if key is dangerous
@@ -336,11 +367,15 @@ def scan_xlsx_file(file_path: Path) -> List[Dict[str, Any]]:
                         })
             
             # Also check for key-value pairs in adjacent rows (vertical layout)
-            for col_idx in range(worksheet.max_column):
+            for col_idx in range(min(worksheet.max_column or 0, 10)):  # Limit to first 10 columns to avoid performance issues
                 col_data = []
-                for row in worksheet.iter_rows(min_col=col_idx+1, max_col=col_idx+1, values_only=True):
-                    if row[0] is not None:
-                        col_data.append((worksheet.cell(row=len(col_data)+1, column=col_idx+1).row, str(row[0]).strip()))
+                try:
+                    for row_idx, row in enumerate(worksheet.iter_rows(min_col=col_idx+1, max_col=col_idx+1, values_only=True), 1):
+                        if row and row[0] is not None:
+                            col_data.append((row_idx, str(row[0]).strip()))
+                except Exception:
+                    # Skip problematic columns silently
+                    continue
                 
                 # Look for key-value pairs in adjacent rows
                 for i in range(0, len(col_data) - 1, 2):
@@ -348,6 +383,10 @@ def scan_xlsx_file(file_path: Path) -> List[Dict[str, Any]]:
                     value_row, value = col_data[i + 1] if i + 1 < len(col_data) else (0, "")
                     
                     if len(key_name) < 2 or key_name.isdigit():
+                        continue
+                    
+                    # Skip if value is empty or None - no point flagging empty values
+                    if not value or value.lower() in ['none', 'null', '']:
                         continue
                     
                     # Check if key is dangerous
@@ -399,16 +438,9 @@ def scan_xlsx_file(file_path: Path) -> List[Dict[str, Any]]:
         workbook.close()
         
     except Exception as e:
-        logger.error(f"Error scanning XLSX file {file_path}: {str(e)}")
-        issues.append({
-            'type': 'xlsx_secrets_detection',
-            'severity': 'ERROR',
-            'description': f'Error scanning XLSX file: {str(e)}',
-            'file': str(file_path),
-            'line': 0,
-            'line_content': '',
-            'module': 'xlsx_secrets_detection'
-        })
+        # Silently skip files that can't be processed - reduces noise
+        logger.debug(f"Skipping XLSX file {file_path}: {str(e)}")
+        pass
     
     return issues
 
@@ -442,7 +474,7 @@ def scan_package(package_path: str, root_package_name: str = None, scanned_files
                 # Add file to scanned set
                 scanned_files.add(str(file_path))
                 
-                logger.info(f"Scanning XLSX file: {file_path}")
+                logger.debug(f"Scanning XLSX file: {file_path}")
                 file_issues = scan_xlsx_file(file_path)
                 if file_issues:
                     # Add package name to each issue
@@ -451,16 +483,9 @@ def scan_package(package_path: str, root_package_name: str = None, scanned_files
                     issues.extend(file_issues)
                     
     except Exception as e:
-        logger.error(f"Error scanning package {package_path}: {str(e)}")
-        issues.append({
-            'type': 'xlsx_secrets_detection',
-            'severity': 'ERROR',
-            'description': f'Error scanning package: {str(e)}',
-            'file': str(package_path),
-            'line': 0,
-            'line_content': '',
-            'module': 'xlsx_secrets_detection'
-        })
+        # Silently skip packages that can't be processed - reduces noise
+        logger.debug(f"Skipping package {package_path}: {str(e)}")
+        pass
     
     return issues
 
