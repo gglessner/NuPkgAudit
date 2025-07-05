@@ -365,7 +365,7 @@ def scan_hardcoded_secrets(file_path, content, root_package=None):
                         continue
                     
                     # Skip simple variable references without potential secrets
-                    if re.match(r'^\[[\w_]+\]$', attr_value):
+                    if re.match(r'^\[[\w_.]+\]$', attr_value):
                         continue
                     
                     # Resolve config values if present  
