@@ -237,10 +237,10 @@ class SStringSecurityAnalyzer:
         
         # Patterns for insecure assignments (looking for attribute assignments)
         insecure_assignment_patterns = [
-            # Attribute assignments with sensitive types
-            r'(\w+(?:SecureString|SString|SecurePassword|SecureText|NetworkCredential|PSCredential|X509Certificate2)\w*)\s*=\s*"([^"]*)"',
-            r'(\w+(?:SecureString|SString|SecurePassword|SecureText|NetworkCredential|PSCredential|X509Certificate2)\w*)\s*=\s*\'([^\']*)\'',
-            r'(\w+(?:SecureString|SString|SecurePassword|SecureText|NetworkCredential|PSCredential|X509Certificate2)\w*)\s*=\s*([^"\'\s>]+)',
+            # Attribute assignments with sensitive types - Fixed to allow exact matches
+            r'(\w*(?:SecureString|SString|SecurePassword|SecureText|NetworkCredential|PSCredential|X509Certificate2)\w*)\s*=\s*"([^"]*)"',
+            r'(\w*(?:SecureString|SString|SecurePassword|SecureText|NetworkCredential|PSCredential|X509Certificate2)\w*)\s*=\s*\'([^\']*)\'',
+            r'(\w*(?:SecureString|SString|SecurePassword|SecureText|NetworkCredential|PSCredential|X509Certificate2)\w*)\s*=\s*([^"\'\s>]+)',
         ]
         
         for line_num, line in enumerate(lines, 1):
