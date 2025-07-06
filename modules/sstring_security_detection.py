@@ -401,6 +401,7 @@ def is_variable_format(value: str) -> bool:
     """
     Check if a value is in variable format [variable_name] or {x:Null}.
     Returns True if it's a safe variable reference, False if it contains hardcoded values.
+    Also returns True for patterns already handled by secure_text_detection module.
     """
     stripped_value = value.strip()
     
@@ -412,9 +413,31 @@ def is_variable_format(value: str) -> bool:
     if stripped_value.startswith('[') and stripped_value.endswith(']'):
         inner_content = stripped_value[1:-1].strip()
         
+        # Patterns already handled by secure_text_detection module - defer to that module
+        config_patterns = [
+            r'In_Config\s*\(',                    # In_Config(&quot;password&quot;)
+            r'in_config\s*\(',                    # in_config(&quot;password&quot;)
+            r'Config_data\s*\(',                  # Config_data(&quot;key&quot;)
+            r'config_data\s*\(',                  # config_data(&quot;key&quot;)
+            r'in_AuthenticationData\s*\(',        # in_AuthenticationData(&quot;key&quot;)
+            r'in_Authentication\s*\(',            # in_Authentication(&quot;key&quot;)
+            r'in_ConfigDetails\s*\(',             # in_ConfigDetails(&quot;key&quot;)
+            r'io_Credentials\s*\(',               # io_Credentials(&quot;key&quot;)
+            r'DirectCast\s*\([^,]*,\s*[^)]*Config', # DirectCast(In_Config(...), SecureString)
+            r'TryCast\s*\([^,]*,\s*[^)]*Config',    # TryCast(In_Config(...), SecureString)  
+            r'CType\s*\([^,]*,\s*[^)]*Config',      # CType(In_Config(...), SecureString)
+            r'DirectCast\s*\([^,]*Config[^,]*,',    # DirectCast(Config_data(...), SecureString)
+            r'TryCast\s*\([^,]*Config[^,]*,',       # TryCast(Config_data(...), SecureString)
+            r'CType\s*\([^,]*Config[^,]*,',         # CType(Config_data(...), SecureString)
+        ]
+        
+        import re
+        for pattern in config_patterns:
+            if re.search(pattern, inner_content, re.IGNORECASE):
+                return True  # Defer to secure_text_detection module
+        
         # Check for non-empty quoted strings - indicates hardcoded values
         # Empty strings (&quot;&quot;) are often just placeholders, ignore them
-        import re
         quoted_patterns = re.findall(r'&quot;([^&]*)&quot;|"([^"]*)"', inner_content)
         has_hardcoded_values = any(match[0] or match[1] for match in quoted_patterns if (match[0] or match[1]).strip())
         
